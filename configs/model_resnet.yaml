@@ -1,6 +1,0 @@
-# Hyperparameters for a simple ResNet Lightning model
-
-num_classes: 10          # number of output classes
-lr: 0.001                # default learning rate
-epochs: 1                # number of epochs per client per round
-depth: 18                # number of layers in the ResNet (e.g., 18 or 34)

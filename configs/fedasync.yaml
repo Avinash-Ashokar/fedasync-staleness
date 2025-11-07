@@ -1,8 +1,0 @@
-# Hyperparameters for the FedAsync strategy
-
-# eta is the server learning rate used when aggregating asynchronous updates.
-eta: 1.0
-
-# staleness_fn defines the function mapping staleness (an integer) to a scalar weight.
-# For example: "1/(1+s)" yields a decay of 1 divided by 1 plus the staleness.
-staleness_fn: "1/(1 + s)"

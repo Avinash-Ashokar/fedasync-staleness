@@ -1,4 +1,0 @@
-# Hyperparameters for the FedBuff strategy
-
-buffer_size: 16      # number of updates to accumulate before aggregation
-timeout_s: 5.0       # maximum waiting time (seconds) before forcing aggregation

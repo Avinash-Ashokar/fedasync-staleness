@@ -1,7 +1,7 @@
 # async_fl_server.py
 import torch
 from copy import deepcopy
-from fed.partitioning import DataDistributor
+from utils.partitioning import DataDistributor
 from .client import Client
 import torch.nn.functional as F
 import torch.nn as nn
