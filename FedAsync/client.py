@@ -35,6 +35,7 @@ def _testloader(root: str, batch_size: int = 256):
 
 def _evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> Tuple[float, float]:
     crit = nn.CrossEntropyLoss()
+    model = model.to(device)
     model.eval()
     total, correct, loss_sum = 0, 0, 0.0
     with torch.no_grad():
@@ -141,6 +142,7 @@ class LocalAsyncClient:
         sd = self.lit.model.state_dict()
         new_sd = list_to_state(sd, arrs)
         self.lit.model.load_state_dict(new_sd, strict=True)
+        self.lit.to(self.device)
 
     def _sleep_delay(self):
         # global delay from config (kept for backward compat)

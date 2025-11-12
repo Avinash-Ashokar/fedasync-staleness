@@ -45,7 +45,7 @@ server_runtime:
   client_delay: 0.0   # extra global delay added on every client before training
 
 io:
-  checkpoints_dir: ./checkpoints
+  checkpoints_dir: ./checkpoints/FedAsync
   logs_dir: ./logs
   results_dir: ./results
 
