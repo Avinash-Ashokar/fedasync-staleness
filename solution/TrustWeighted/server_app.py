@@ -6,7 +6,7 @@ import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context
 from flwr.serverapp import Grid, ServerApp
 
-from TrustWeighted.task import LitAutoEncoder  
+from TrustWeighted.task import LitCifar  
 from TrustWeighted.strategy import AsyncTrustFedAvg
 
 # Create ServerApp instance (this is what pyproject.toml points to)
@@ -23,7 +23,7 @@ def main(grid: Grid, context: Context) -> None:
     max_epochs: int = int(context.run_config["max-epochs"])
 
     # Initialize global model and wrap into ArrayRecord
-    model = LitAutoEncoder()
+    model = LitCifar()
     arrays = ArrayRecord(model.state_dict())
 
     # Initialize trust-weighted strategy (inherits FedAvg.start)

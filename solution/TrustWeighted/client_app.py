@@ -8,7 +8,7 @@ from datasets.utils.logging import disable_progress_bar
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from TrustWeighted.task import LitAutoEncoder, load_data
+from TrustWeighted.task import LitCifar, load_data
 
 # Disable tqdm progress bars from HuggingFace/datasets to keep logs clean
 disable_progress_bar()
@@ -32,7 +32,7 @@ def train(msg: Message, context: Context) -> Message:
     # -------------------------------------------------------------------------
     # 1) Rebuild model and load global parameters
     # -------------------------------------------------------------------------
-    model = LitAutoEncoder()
+    model = LitCifar()
     global_arrays: ArrayRecord = msg.content["arrays"]  # type: ignore[index]
     model.load_state_dict(global_arrays.to_torch_state_dict())
 
@@ -87,7 +87,7 @@ def evaluate(msg: Message, context: Context) -> Message:
     """
 
     # Rebuild model and load the parameters to evaluate
-    model = LitAutoEncoder()
+    model = LitCifar()
     arrays: ArrayRecord = msg.content["arrays"]  # type: ignore[index]
     model.load_state_dict(arrays.to_torch_state_dict())
 
