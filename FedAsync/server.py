@@ -83,20 +83,19 @@ class AsyncFedServer:
         self.final_model_path = Path(final_model_path) if final_model_path else Path("./results/FedAsyncModel.pt")
         self.final_model_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Init CSV headers if files don't exist
-        if not self.csv_path.exists():
-            self.csv_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.csv_path.open("w", newline="") as f:
-                csv.writer(f).writerow(["total_agg", "avg_train_loss", "avg_train_acc",
-                                        "test_loss", "test_acc", "time"])
+        # Always create fresh CSV for new runs (clear old results)
+        self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.csv_path.open("w", newline="") as f:
+            csv.writer(f).writerow(["total_agg", "avg_train_loss", "avg_train_acc",
+                                    "test_loss", "test_acc", "time"])
 
-        if not self.participation_csv.exists():
-            self.participation_csv.parent.mkdir(parents=True, exist_ok=True)
-            with self.participation_csv.open("w", newline="") as f:
-                csv.writer(f).writerow([
-                    "client_id", "local_train_loss", "local_train_acc",
-                    "local_test_loss", "local_test_acc", "total_agg"
-                ])
+        # Always create fresh participation CSV for new runs
+        self.participation_csv.parent.mkdir(parents=True, exist_ok=True)
+        with self.participation_csv.open("w", newline="") as f:
+            csv.writer(f).writerow([
+                "client_id", "local_train_loss", "local_train_acc",
+                "local_test_loss", "local_test_acc", "total_agg"
+            ])
 
         self._lock = threading.Lock()
         self._stop = False

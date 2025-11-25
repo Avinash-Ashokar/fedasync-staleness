@@ -79,19 +79,19 @@ class BufferedFedServer:
         self.final_model_path = Path(final_model_path) if final_model_path else Path("./results/FedBuffModel.pt")
         self.final_model_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if not self.csv_path.exists():
-            self.csv_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.csv_path.open("w", newline="") as f:
-                csv.writer(f).writerow(["total_agg", "avg_train_loss", "avg_train_acc",
-                                        "test_loss", "test_acc", "time"])
+        # Always create fresh CSV for new runs (clear old results)
+        self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.csv_path.open("w", newline="") as f:
+            csv.writer(f).writerow(["total_agg", "avg_train_loss", "avg_train_acc",
+                                    "test_loss", "test_acc", "time"])
 
-        if not self.participation_csv.exists():
-            self.participation_csv.parent.mkdir(parents=True, exist_ok=True)
-            with self.participation_csv.open("w", newline="") as f:
-                csv.writer(f).writerow([
-                    "client_id", "local_train_loss", "local_train_acc",
-                    "local_test_loss", "local_test_acc", "total_agg"
-                ])
+        # Always create fresh participation CSV for new runs
+        self.participation_csv.parent.mkdir(parents=True, exist_ok=True)
+        with self.participation_csv.open("w", newline="") as f:
+            csv.writer(f).writerow([
+                "client_id", "local_train_loss", "local_train_acc",
+                "local_test_loss", "local_test_acc", "total_agg"
+            ])
 
         self._lock = threading.Lock()
         self._stop = False
@@ -134,6 +134,13 @@ class BufferedFedServer:
         if not self._buffer:
             return
 
+        with self._lock:
+            if self._stop:
+                return
+            if self.max_rounds is not None and self.t_round >= self.max_rounds:
+                self._stop = True
+                return
+
         g = state_to_list(self.model.state_dict())
         total_samples = sum(u["num_samples"] for u in self._buffer)
 
@@ -152,7 +159,12 @@ class BufferedFedServer:
 
         self._buffer.clear()
         self._buffer_last_flush = time.time()
-        self.t_round += 1
+        
+        with self._lock:
+            self.t_round += 1
+            if self.max_rounds is not None and self.t_round >= self.max_rounds:
+                self._stop = True
+        
         self._save_ckpt()
 
     def submit_update(
