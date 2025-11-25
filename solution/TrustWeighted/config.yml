@@ -1,0 +1,2 @@
+data:
+  dirichlet_alpha: 0.5    # controls non-IID strength

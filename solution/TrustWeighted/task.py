@@ -1,10 +1,11 @@
 """TrustWeighted/task.py
 
-Model definition and data loading utilities for Flower + PyTorch Lightning + flwr-datasets.
+CIFAR-10 model + data loading utilities with Dirichlet non-IID partitioning.
 """
 
 from __future__ import annotations
 
+import yaml
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -14,63 +15,82 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 import pytorch_lightning as pl
-from torchvision import transforms
+from torchvision import transforms, datasets
 
 from flwr_datasets import FederatedDataset
-from flwr_datasets.partitioner import IidPartitioner
+from flwr_datasets.partitioner import DirichletPartitioner
+
+
+# ---------------------------------------------------------------------------
+# Load config.yml
+# ---------------------------------------------------------------------------
+
+def load_config() -> dict:
+    """Load YAML config containing Dirichlet alpha."""
+    with open("TrustWeighted/config.yml", "r") as f:
+        return yaml.safe_load(f)
+
+CONFIG = load_config()
+DIRICHLET_ALPHA = float(CONFIG["data"]["dirichlet_alpha"])
 
 
 # ---------------------------------------------------------------------------
 # Model definition
 # ---------------------------------------------------------------------------
 
-
 class LitAutoEncoder(pl.LightningModule):
-    """Simple autoencoder for MNIST-like images."""
+    """Simple convolutional autoencoder for CIFAR-10."""
 
     def __init__(self, lr: float = 1e-3) -> None:
         super().__init__()
         self.save_hyperparameters()
 
         self.encoder = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),  # 16×16
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # 8×8
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),  # 4×4
+            nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(28 * 28, 256),
-            nn.ReLU(),
-            nn.Linear(256, 64),
-            nn.ReLU(),
         )
+
         self.decoder = nn.Sequential(
-            nn.Linear(64, 256),
+            nn.Linear(128 * 4 * 4, 128 * 4 * 4),
             nn.ReLU(),
-            nn.Linear(256, 28 * 28),
+            nn.Unflatten(1, (128, 4, 4)),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # 8×8
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # 16×16
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 3, kernel_size=4, stride=2, padding=1),  # 32×32
             nn.Sigmoid(),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         z = self.encoder(x)
         x_hat = self.decoder(z)
-        x_hat = x_hat.view(-1, 1, 28, 28)
         return x_hat
 
-    def training_step(self, batch, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch, batch_idx):
         x, _ = batch
         x_hat = self(x)
         loss = F.mse_loss(x_hat, x)
-        self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("train_loss", loss, on_epoch=True)
         return loss
 
-    def validation_step(self, batch, batch_idx: int) -> torch.Tensor:
+    def validation_step(self, batch, batch_idx):
         x, _ = batch
         x_hat = self(x)
         loss = F.mse_loss(x_hat, x)
-        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("val_loss", loss, on_epoch=True)
         return loss
 
-    def test_step(self, batch, batch_idx: int) -> torch.Tensor:
+    def test_step(self, batch, batch_idx):
         x, _ = batch
         x_hat = self(x)
         loss = F.mse_loss(x_hat, x)
-        self.log("test_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("test_loss", loss, on_epoch=True)
         return loss
 
     def configure_optimizers(self):
@@ -78,33 +98,30 @@ class LitAutoEncoder(pl.LightningModule):
 
 
 # ---------------------------------------------------------------------------
-# Dataset wrapper to go from HuggingFace Datasets → PyTorch Dataset
+# Dataset wrapper
 # ---------------------------------------------------------------------------
 
-
 class HFImageDataset(Dataset):
-    """Wrap a HuggingFace image dataset with keys 'image' and 'label'."""
-
-    def __init__(self, hf_dataset, transform=None) -> None:
+    """Wrap HuggingFace-like dataset objects into PyTorch Dataset."""
+    def __init__(self, hf_dataset, transform=None):
         self.ds = hf_dataset
         self.transform = transform
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.ds)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx):
         item = self.ds[int(idx)]
-        img = item["image"]  # PIL image or array
+        img = item["img"]
         label = int(item["label"])
-        if self.transform is not None:
+        if self.transform:
             img = self.transform(img)
         return img, label
 
 
 # ---------------------------------------------------------------------------
-# Data loading
+# Data Loading with Dirichlet Non-IID
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class DataConfig:
@@ -114,92 +131,66 @@ class DataConfig:
     val_fraction: float = 0.1
     seed: int = 42
 
-
 DATA_CFG = DataConfig()
 
-
-def _build_transform() -> transforms.Compose:
-    """Transforms for MNIST-like grayscale images."""
-    return transforms.Compose(
-        [
-            transforms.Resize((28, 28)),
-            transforms.ToTensor(),  # [0,1]
-        ]
-    )
+def _build_transform():
+    return transforms.Compose([
+        transforms.Resize((32, 32)),
+        transforms.ToTensor(),
+    ])
 
 
 def load_data(partition_id: int, num_partitions: int):
-    """Load federated train/val/test data for a given client partition.
+    """Load CIFAR-10 data using Dirichlet non-IID partitioning."""
 
-    Parameters
-    ----------
-    partition_id : int
-        The client id (0 .. num_partitions-1).
-    num_partitions : int
-        Total number of client partitions.
-
-    Returns
-    -------
-    trainloader : DataLoader
-        Dataloader for the local train split.
-    valloader : DataLoader
-        Dataloader for the local validation split.
-    testloader : DataLoader
-        Dataloader for the centralized test split.
-    """
-    # Federated MNIST dataset
     fds = FederatedDataset(
-        dataset="mnist",
-        partitioners={"train": IidPartitioner(num_partitions=num_partitions)},
+        dataset="cifar10",
+        partitioners={
+            "train": DirichletPartitioner(
+                num_partitions=num_partitions,
+                partition_by="label", 
+                alpha=DIRICHLET_ALPHA,  # Loaded from config.yml
+            )
+        },
     )
 
-    # Local partition of the training data for this client
+    # non-IID client partition
     partition = fds.load_partition(partition_id, split="train")
 
-    # Split local partition into train/val (DatasetDict with "train" and "test")
+    # Local split: train/val
     partition_train_valid = partition.train_test_split(
         test_size=DATA_CFG.val_fraction, seed=DATA_CFG.seed
     )
 
-    # Centralized test split, one HF Dataset (columns: "image", "label")
+    # Centralized test set
     full_test = fds.load_split("test")
 
     transform = _build_transform()
 
-    train_ds = HFImageDataset(partition_train_valid["train"], transform=transform)
-    val_ds = HFImageDataset(partition_train_valid["test"], transform=transform)
-    test_ds = HFImageDataset(full_test, transform=transform)
+    train_ds = HFImageDataset(partition_train_valid["train"], transform)
+    val_ds = HFImageDataset(partition_train_valid["test"], transform)
+    test_ds = HFImageDataset(full_test, transform)
 
+    # DataLoaders
     trainloader = DataLoader(
-        train_ds,
-        batch_size=DATA_CFG.batch_size,
-        shuffle=True,
-        num_workers=DATA_CFG.num_workers,
-        persistent_workers=True,
+        train_ds, batch_size=DATA_CFG.batch_size, shuffle=True,
+        num_workers=DATA_CFG.num_workers, persistent_workers=True
     )
     valloader = DataLoader(
-        val_ds,
-        batch_size=DATA_CFG.batch_size,
-        shuffle=False,
-        num_workers=DATA_CFG.num_workers,
-        persistent_workers=True,
+        val_ds, batch_size=DATA_CFG.batch_size, shuffle=False,
+        num_workers=DATA_CFG.num_workers, persistent_workers=True
     )
     testloader = DataLoader(
-        test_ds,
-        batch_size=DATA_CFG.batch_size,
-        shuffle=False,
-        num_workers=DATA_CFG.test_num_workers,
-        persistent_workers=True,
+        test_ds, batch_size=DATA_CFG.batch_size, shuffle=False,
+        num_workers=DATA_CFG.test_num_workers, persistent_workers=True
     )
 
     return trainloader, valloader, testloader
 
 
 # ---------------------------------------------------------------------------
-# Convenience factory for model (if client/server want a simple hook)
+# Model factory
 # ---------------------------------------------------------------------------
 
-
-def get_model(lr: float = 1e-3) -> LitAutoEncoder:
-    """Factory function to create a new model instance."""
+def get_model(lr=1e-3):
     return LitAutoEncoder(lr=lr)
