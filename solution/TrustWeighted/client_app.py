@@ -9,6 +9,8 @@ from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
 from TrustWeighted.task import LitCifar, load_data
+import time    
+import random
 
 # Disable tqdm progress bars from HuggingFace/datasets to keep logs clean
 disable_progress_bar()
@@ -28,7 +30,7 @@ def train(msg: Message, context: Context) -> Message:
     * train for ``max-epochs`` on the local data partition
     * report back the updated weights and training loss
     """
-
+    
     # -------------------------------------------------------------------------
     # 1) Rebuild model and load global parameters
     # -------------------------------------------------------------------------
@@ -41,6 +43,15 @@ def train(msg: Message, context: Context) -> Message:
     # -------------------------------------------------------------------------
     partition_id = int(context.node_config["partition-id"])
     num_partitions = int(context.node_config["num-partitions"])
+    
+    # --- Delay Simulation ---
+    min_d = float(context.run_config.get("min_delay", 0.0))
+    max_d = float(context.run_config.get("max_delay", 0.0))
+    delay = random.uniform(min_d, max_d)
+    print(f"[Client {partition_id}] Delay = {delay:.2f}s")
+    time.sleep(delay)
+    # -----------------------
+
     trainloader, valloader, _ = load_data(partition_id, num_partitions)
 
     # -------------------------------------------------------------------------

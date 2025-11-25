@@ -209,11 +209,16 @@ class AsyncTrustFedAvg(FedAvg):
         self,
         server_round: int,
         arrays: ArrayRecord,
-        config: ConfigRecord,
+        config: dict | ConfigRecord,
         grid: Grid,
-    ) -> Iterable[Message]:
-        # Save the global model used in this round to compute deltas later
-        self._current_arrays = arrays
+    ) -> List[Message]:
+        # Remember current global weights for aggregation
+        self._global_arrays = arrays
+
+        # Flower's FedAvg.configure_train expects a ConfigRecord, not a plain dict
+        if isinstance(config, dict):
+            config = ConfigRecord(config)
+
         return super().configure_train(server_round, arrays, config, grid)
 
     # ---- aggregate_train: custom trust-weighted aggregation ----

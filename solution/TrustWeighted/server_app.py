@@ -6,7 +6,7 @@ import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context
 from flwr.serverapp import Grid, ServerApp
 
-from TrustWeighted.task import LitCifar  
+from TrustWeighted.task import _RAW_CFG, LitCifar  
 from TrustWeighted.strategy import AsyncTrustFedAvg
 
 # Create ServerApp instance (this is what pyproject.toml points to)
@@ -34,14 +34,17 @@ def main(grid: Grid, context: Context) -> None:
     )
 
     # Training configuration passed to clients
-    train_config = ConfigRecord({"max-epochs": max_epochs})
-
+    train_cfg = {
+        "max-epochs": max_epochs,
+        "min_delay": _RAW_CFG.get("async", {}).get("min_delay", 0.0),
+        "max_delay": _RAW_CFG.get("async", {}).get("max_delay", 0.0),
+    }
     # Start training
     result = strategy.start(
         grid=grid,
         initial_arrays=arrays,
         num_rounds=num_rounds,
-        train_config=train_config,
+        train_config=train_cfg,
     )
 
     # Save final model to disk
