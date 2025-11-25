@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/FedAsync/run.py", line 24, in <module>
+    from FedAsync.client import LocalAsyncClient
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/FedAsync/client.py", line 11, in <module>
+    import pytorch_lightning as pl
+ModuleNotFoundError: No module named 'pytorch_lightning'

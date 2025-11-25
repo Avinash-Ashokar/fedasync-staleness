@@ -1,0 +1,4 @@
+lr,batch_size,weight_decay,optimizer,momentum,best_test_acc,best_epoch,final_test_acc,final_train_acc
+0.001,64,0.0,adam,0.0,18.2400,26,17.7500,18.1940
+0.001,64,0.0,sgd,0.9,63.6900,30,63.6900,62.4880
+0.001,64,0.0005,adam,0.0,67.5300,30,67.5300,65.8980
