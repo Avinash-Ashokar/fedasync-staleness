@@ -130,9 +130,6 @@ class DataDistributor:
         print(f"📊 Data distribution plot saved at: {save_path}")
 
 
-# -------------------------------
-# Example Usage (for testing)
-# -------------------------------
 if __name__ == "__main__":
     distributor = DataDistributor(dataset_name="CIFAR10")
     distributor.distribute_data(num_clients=5, alpha=0.3, seed=42)
