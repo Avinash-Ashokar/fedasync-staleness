@@ -269,6 +269,9 @@ class AsyncTrustFedAvg(FedAvg):
 
             train_loss = float(metrics.get("train_loss", 0.0))
             num_examples = int(metrics.get(self.weighted_by_key, 1))
+            base_round = int(metrics.get("base-round", server_round))
+            staleness = max(server_round - base_round, 0)
+
             total_examples += num_examples
             weighted_loss_sum += train_loss * num_examples
 
@@ -277,7 +280,7 @@ class AsyncTrustFedAvg(FedAvg):
             cu = ClientUpdate(
                 update=update_tensors,
                 num_examples=num_examples,
-                staleness=0,
+                staleness=staleness,
                 delta_loss_norm=delta_loss_norm,
                 update_norm=update_norm,
                 alignment_cos=alignment_cos,

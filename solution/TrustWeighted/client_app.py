@@ -47,12 +47,15 @@ def train(msg: Message, context: Context) -> Message:
     # 3) Run local training with PyTorch Lightning
     # -------------------------------------------------------------------------
     max_epochs = int(context.run_config.get("max-epochs", 1))
+    base_round = int(context.run_config.get("server-round", 0))
+
     trainer = pl.Trainer(
         max_epochs=max_epochs,
         enable_checkpointing=False,
         logger=False,
         enable_model_summary=False,
     )
+
     trainer.fit(model, train_dataloaders=trainloader, val_dataloaders=valloader)
 
     # Retrieve averaged training loss from Lightning's logged metrics
@@ -64,15 +67,14 @@ def train(msg: Message, context: Context) -> Message:
     # -------------------------------------------------------------------------
     arrays = ArrayRecord(model.state_dict())
     metrics = MetricRecord(
-        {
-            "train_loss": train_loss,
-            # This key is used by FedAvg/AsyncTrustFedAvg as the aggregation weight
-            "num-examples": len(trainloader.dataset),
-            # Optional: placeholder for staleness if you later move to a truly
-            # asynchronous setup
-            "staleness": 0.0,
-        }
-    )
+            {
+                "train_loss": train_loss,
+                # This key is used by FedAvg/AsyncTrustFedAvg as the aggregation weight
+                "num-examples": len(trainloader.dataset),
+                # Round in which this client received the global model
+                "base-round": base_round,
+            }
+        )
     content = RecordDict({"arrays": arrays, "metrics": metrics})
 
     return Message(content=content, reply_to=msg)
