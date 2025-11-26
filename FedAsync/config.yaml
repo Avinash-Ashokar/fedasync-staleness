@@ -3,6 +3,7 @@ data:
   dataset: cifar10
   data_dir: ./data
   num_classes: 10
+  alpha_list: [0.1, 1.0, 10.0, 100.0, 1000.0]
 
 # ---- Clients ----
 clients:
@@ -43,8 +44,6 @@ train:
 
 # ---- Partitioning ----
 partition_alpha: 0.5
-data:
-  alpha_list: [0.1, 1.0, 10.0, 100.0, 1000.0]
 
 # ---- Reproducibility ----
 seed: 1
