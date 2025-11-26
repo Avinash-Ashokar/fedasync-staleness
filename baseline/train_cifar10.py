@@ -45,8 +45,7 @@ def main():
     test_dataset = datasets.CIFAR10(args.data_dir, train=False, download=True, transform=val_test_tf)
 
     indices = torch.randperm(len(train_full), generator=torch.Generator().manual_seed(args.seed)).tolist()
-    train_size = int(0.8 * len(train_full))
-    train_indices, val_indices = indices[:train_size], indices[train_size:]
+    train_indices, val_indices = indices[:int(0.8*len(train_full))], indices[int(0.8*len(train_full)):]
 
     class SubsetDataset:
         def __init__(self, d, i, t): self.d, self.i, self.t = d, i, t
@@ -60,8 +59,7 @@ def main():
 
     model = models.squeezenet1_1(weights=None)
     model.classifier[1] = nn.Conv2d(512, 10, kernel_size=1)
-    model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
+    model, criterion = model.to(device), nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd)
 
     logs_base = Path("logs") / "avinash" / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_baseline"
@@ -69,8 +67,7 @@ def main():
     csv_header = "time_sec,epoch,train_loss,val_acc,test_acc,lr,wd,batch,seed"
     with open(logs_base / "COMMIT.txt", "w") as f:
         f.write(f"{subprocess.check_output(['git','rev-parse','--short','HEAD'],text=True).strip()},{csv_header}\n")
-    with open(logs_base / "metrics.csv", "w", newline="") as f:
-        csv.writer(f).writerow(csv_header.split(","))
+    csv.writer(open(logs_base / "metrics.csv", "w", newline="")).writerow(csv_header.split(","))
 
     start_time = time.time()
     for epoch in range(1, args.epochs + 1):
