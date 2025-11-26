@@ -50,7 +50,7 @@ def _evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> Tup
 
 
 class LitCifar(pl.LightningModule):
-    def __init__(self, base_model: nn.Module, lr: float = 1e-3):
+    def __init__(self, base_model: nn.Module, lr: float = 1e-3, momentum: float = 0.9, weight_decay: float = 5e-4):
         super().__init__()
         self.save_hyperparameters(ignore=["base_model"])
         self.model = base_model
@@ -83,7 +83,9 @@ class LitCifar(pl.LightningModule):
         return self._train_loss_sum / self._train_total, self._train_correct / self._train_total
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        momentum = getattr(self.hparams, 'momentum', 0.9)
+        weight_decay = getattr(self.hparams, 'weight_decay', 5e-4)
+        return torch.optim.SGD(self.parameters(), lr=self.hparams.lr, momentum=momentum, weight_decay=weight_decay)
 
 
 class LocalAsyncClient:
@@ -106,7 +108,10 @@ class LocalAsyncClient:
         self.device = get_device()
 
         base = build_squeezenet(num_classes=cfg["data"]["num_classes"], pretrained=False)
-        self.lit = LitCifar(base, lr=float(cfg["clients"]["lr"]))
+        lr = float(cfg["clients"]["lr"])
+        momentum = float(cfg["clients"].get("momentum", 0.9))
+        weight_decay = float(cfg["clients"].get("weight_decay", 5e-4))
+        self.lit = LitCifar(base, lr=lr, momentum=momentum, weight_decay=weight_decay)
 
         self.loader = DataLoader(subset, batch_size=int(cfg["clients"]["batch_size"]),
                                  shuffle=True, num_workers=0)

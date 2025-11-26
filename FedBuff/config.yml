@@ -6,11 +6,13 @@ data:
 
 # ---- Clients ----
 clients:
-  total: 10
-  concurrent: 5
+  total: 20
+  concurrent: 8
   local_epochs: 1
-  batch_size: 64
-  lr: 0.001
+  batch_size: 128
+  lr: 0.0125
+  momentum: 0.9
+  weight_decay: 5e-4
 
   # --- heterogeneity controls ---
   struggle_percent: 30          # % of all clients that are slow
@@ -23,30 +25,31 @@ clients:
 
 # ---- Buffered FedBuff ----
 buff:
-  buffer_size: 5
-  buffer_timeout_s: 10.0
+  buffer_size: 8
+  buffer_timeout_s: 0.5
   use_sample_weighing: true
   staleness_type: poly  # poly or exp
   staleness_alpha: 0.5
   clip_norm: null  # float or null
   tau_max: null  # int or null
+  eta: 0.00125  # server learning rate
 
 # ---- Evaluation / stopping ----
 eval:
-  interval_seconds: 15      # evaluate/log every T seconds
+  interval_seconds: 0.5      # evaluate/log every T seconds (timeout)
   target_accuracy: 0.8     # stop when global test_acc >= this value
 
 # ---- Safety cap on merges (optional) ----
 train:
-  max_rounds: 5
+  max_rounds: 300  # min(300 flushes, 30 minutes)
 
 # ---- Partitioning ----
 partition_alpha: 0.5
-# alpha_schedule: [0.1, 1, 10, 100, 1000]  # for T4 (not implemented yet)
-# stage_length_steps: 50  # for T4 (not implemented yet)
+data:
+  alpha_list: [0.1, 1.0, 10.0, 100.0, 1000.0]
 
 # ---- Reproducibility ----
-seed: 42
+seed: 1
 
 # ---- Runtime / I/O ----
 server_runtime:

@@ -53,6 +53,8 @@ def main():
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     logs_base = Path(cfg["io"]["logs_dir"]) / "avinash" / f"run_{run_timestamp}"
     logs_base.mkdir(parents=True, exist_ok=True)
+    with open(logs_base / "CONFIG.yaml", "w") as f:
+        yaml.dump(cfg, f)
     
     import subprocess
     commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
