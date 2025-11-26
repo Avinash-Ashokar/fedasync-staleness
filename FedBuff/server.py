@@ -3,6 +3,7 @@ import time
 import threading
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
+import math
 
 import torch
 from torch.utils.data import DataLoader
@@ -55,6 +56,10 @@ class BufferedFedServer:
         final_model_path: Optional[str] = None,
         resume: bool = True,
         device: Optional[torch.device] = None,
+        staleness_type: str = "poly",
+        staleness_alpha: float = 0.5,
+        clip_norm: Optional[float] = None,
+        tau_max: Optional[int] = None,
     ):
         self.model = global_model
         self.template = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
@@ -65,6 +70,10 @@ class BufferedFedServer:
         self.buffer_size = int(buffer_size)
         self.buffer_timeout_s = float(buffer_timeout_s)
         self.use_sample_weighing = bool(use_sample_weighing)
+        self.staleness_type = str(staleness_type)
+        self.staleness_alpha = float(staleness_alpha)
+        self.clip_norm = float(clip_norm) if clip_norm is not None else None
+        self.tau_max = int(tau_max) if tau_max is not None else None
 
         self.eval_interval_s = int(eval_interval_s)
         self.target_accuracy = float(target_accuracy)
@@ -82,8 +91,12 @@ class BufferedFedServer:
         if not self.csv_path.exists():
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
             with self.csv_path.open("w", newline="") as f:
-                csv.writer(f).writerow(["total_agg", "avg_train_loss", "avg_train_acc",
-                                        "test_loss", "test_acc", "time"])
+                csv.writer(f).writerow([
+                    "time_sec", "round", "test_acc", "updates_per_sec",
+                    "tau_bin_0", "tau_bin_1", "tau_bin_2", "tau_bin_3", "tau_bin_4", "tau_bin_5",
+                    "tau_bin_6_10", "tau_bin_11_20", "tau_bin_21p",
+                    "align_mean", "fairness_gini", "method", "alpha", "K", "timeout", "m", "seed"
+                ])
 
         if not self.participation_csv.exists():
             self.participation_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +116,8 @@ class BufferedFedServer:
 
         self._buffer: List[Dict] = []
         self._buffer_last_flush = time.time()
+        self._staleness_history: List[int] = []
+        self._client_weights: Dict[int, float] = {}
 
         if resume:
             self._maybe_resume()
@@ -130,6 +145,12 @@ class BufferedFedServer:
         with self._lock:
             return state_to_list(self.model.state_dict()), self.t_round
 
+    def _compute_staleness_weight(self, staleness: int) -> float:
+        if self.staleness_type == "exp":
+            return math.exp(-self.staleness_alpha * float(staleness))
+        else:
+            return math.pow(1.0 + float(staleness), -self.staleness_alpha)
+
     def _flush_buffer(self) -> None:
         if not self._buffer:
             return
@@ -139,8 +160,26 @@ class BufferedFedServer:
 
         merged = [torch.zeros_like(gi, device=gi.device) for gi in g]
         for u in self._buffer:
+            staleness = max(0, self.t_round - u["base_version"])
+            self._staleness_history.append(staleness)
+            
+            staleness_weight = self._compute_staleness_weight(staleness)
             weight = float(u["num_samples"]) / float(total_samples) if self.use_sample_weighing else 1.0 / len(self._buffer)
-            for i, ci in enumerate(u["new_params"]):
+            weight *= staleness_weight
+            
+            self._client_weights[u["client_id"]] = self._client_weights.get(u["client_id"], 0.0) + weight
+            
+            update_params = u["new_params"]
+            if self.clip_norm is not None:
+                g_tensors = [gi.to(update_params[0].device).type_as(update_params[0]) for gi in g]
+                deltas = [ci.to(g_tensors[i].device).type_as(g_tensors[i]) - g_tensors[i] for i, ci in enumerate(update_params)]
+                delta_norms_sq = [torch.norm(d.view(-1)).item() ** 2 for d in deltas]
+                total_norm = math.sqrt(sum(delta_norms_sq))
+                if total_norm > self.clip_norm:
+                    clip_coef = self.clip_norm / (total_norm + 1e-8)
+                    update_params = [g_tensors[i] + deltas[i] * clip_coef for i in range(len(deltas))]
+            
+            for i, ci in enumerate(update_params):
                 ci_tensor = ci.to(merged[i].device).type_as(merged[i])
                 merged[i] += weight * ci_tensor
 
@@ -172,6 +211,10 @@ class BufferedFedServer:
                 return
             if self.max_rounds is not None and self.t_round >= self.max_rounds:
                 self._stop = True
+                return
+
+            staleness = max(0, self.t_round - base_version)
+            if self.tau_max is not None and staleness > self.tau_max:
                 return
 
             with self.participation_csv.open("a", newline="") as f:
@@ -222,16 +265,62 @@ class BufferedFedServer:
             n_sum += n
         return loss_sum / max(1, n_sum), acc_sum / max(1, n_sum)
 
-    def _periodic_eval_and_log(self):
+    def _compute_tau_bins(self) -> List[int]:
+        bins = [0] * 9
+        for tau in self._staleness_history:
+            if tau == 0:
+                bins[0] += 1
+            elif tau == 1:
+                bins[1] += 1
+            elif tau == 2:
+                bins[2] += 1
+            elif tau == 3:
+                bins[3] += 1
+            elif tau == 4:
+                bins[4] += 1
+            elif tau == 5:
+                bins[5] += 1
+            elif 6 <= tau <= 10:
+                bins[6] += 1
+            elif 11 <= tau <= 20:
+                bins[7] += 1
+            else:
+                bins[8] += 1
+        return bins
+
+    def _compute_fairness_gini(self) -> float:
+        if not self._client_weights:
+            return 0.0
+        weights = sorted(self._client_weights.values())
+        n = len(weights)
+        if n == 0 or sum(weights) == 0:
+            return 0.0
+        cumsum = 0.0
+        gini = 0.0
+        for i, w in enumerate(weights):
+            cumsum += w
+            gini += (i + 1) * w
+        gini = (2.0 * gini) / (n * sum(weights)) - (n + 1) / n
+        return max(0.0, min(1.0, gini))
+
+    def _periodic_eval_and_log(self, method: str = "FedBuff", alpha: float = 0.5, K: int = 8, timeout: float = 0.5, m: int = 20, seed: int = 42):
         test_loss, test_acc = _evaluate(self.model, self.testloader, self.device)
         avg_train_loss, avg_train_acc = self._compute_avg_train()
         now = time.time() - self._start_ts
+        updates_per_sec = self.t_round / now if now > 0 else 0.0
+        
+        tau_bins = self._compute_tau_bins()
+        fairness_gini = self._compute_fairness_gini()
+        
         self._train_loss_acc_accum.clear()
+        self._staleness_history.clear()
 
         with self.csv_path.open("a", newline="") as f:
             csv.writer(f).writerow([
-                self.t_round, f"{avg_train_loss:.6f}", f"{avg_train_acc:.6f}",
-                f"{test_loss:.6f}", f"{test_acc:.6f}", f"{now:.3f}"
+                f"{now:.3f}", self.t_round, f"{test_acc:.6f}", f"{updates_per_sec:.6f}",
+                tau_bins[0], tau_bins[1], tau_bins[2], tau_bins[3], tau_bins[4], tau_bins[5],
+                tau_bins[6], tau_bins[7], tau_bins[8],
+                "NaN", f"{fairness_gini:.6f}", method, f"{alpha:.6f}", K, f"{timeout:.6f}", m, seed
             ])
         print(f"[LOG] total_agg={self.t_round} "
               f"avg_train_loss={avg_train_loss:.4f} avg_train_acc={avg_train_acc:.4f} "
@@ -246,6 +335,9 @@ class BufferedFedServer:
             self._stop = True
 
     def start_eval_timer(self):
+        params = getattr(self, "_method_params", {
+            "method": "FedBuff", "alpha": 0.5, "K": 8, "timeout": 0.5, "m": 20, "seed": 42
+        })
         def _loop():
             next_ts = time.time() + self.eval_interval_s
             while True:
@@ -255,7 +347,7 @@ class BufferedFedServer:
                 with self._lock:
                     if self._stop:
                         break
-                    self._periodic_eval_and_log()
+                    self._periodic_eval_and_log(**params)
                 next_ts += self.eval_interval_s
         threading.Thread(target=_loop, daemon=True).start()
 

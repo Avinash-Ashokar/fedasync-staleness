@@ -24,6 +24,10 @@ buff:
   buffer_size: 5
   buffer_timeout_s: 10.0
   use_sample_weighing: true
+  staleness_type: poly  # poly or exp
+  staleness_alpha: 0.5
+  clip_norm: null  # float or null
+  tau_max: null  # int or null
 
 # ---- Evaluation / stopping ----
 eval:
@@ -36,6 +40,8 @@ train:
 
 # ---- Partitioning ----
 partition_alpha: 0.5
+# alpha_schedule: [0.1, 1, 10, 100, 1000]  # for T4 (not implemented yet)
+# stage_length_steps: 50  # for T4 (not implemented yet)
 
 # ---- Reproducibility ----
 seed: 42
