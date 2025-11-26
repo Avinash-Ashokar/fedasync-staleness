@@ -18,6 +18,8 @@ import threading
 import time
 from typing import Dict, Any, List
 import random
+from datetime import datetime
+from pathlib import Path
 
 import yaml
 
@@ -52,6 +54,19 @@ def main():
         seed=seed,
     )
 
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_base = Path(cfg["io"]["logs_dir"]) / "avinash" / f"run_{run_timestamp}"
+    logs_base.mkdir(parents=True, exist_ok=True)
+    
+    import subprocess
+    commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+    csv_header = "time_sec,round,test_acc,updates_per_sec,tau_bin_0,tau_bin_1,tau_bin_2,tau_bin_3,tau_bin_4,tau_bin_5,tau_bin_6_10,tau_bin_11_20,tau_bin_21p,align_mean,fairness_gini,method,alpha,K,timeout,m,seed"
+    with open(logs_base / "COMMIT.txt", "w") as f:
+        f.write(f"{commit_hash} {csv_header}\n")
+    
+    global_log_csv = str(logs_base / "FedAsync.csv")
+    client_participation_csv = str(logs_base / "FedAsyncClientParticipation.csv")
+
     # Build server with periodic eval/log and accuracy-based stopping
     global_model = build_squeezenet(num_classes=cfg["data"]["num_classes"], pretrained=False)
     server = AsyncFedServer(
@@ -65,13 +80,24 @@ def main():
         eval_interval_s=int(cfg["eval"]["interval_seconds"]),
         data_dir=cfg["data"]["data_dir"],
         checkpoints_dir=cfg["io"]["checkpoints_dir"],
-        logs_dir=cfg["io"]["logs_dir"],
-        global_log_csv=cfg["io"].get("global_log_csv"),
-        client_participation_csv=cfg["io"].get("client_participation_csv"),
+        logs_dir=str(logs_base),
+        global_log_csv=global_log_csv,
+        client_participation_csv=client_participation_csv,
         final_model_path=cfg["io"].get("final_model_path"),
         resume=True,
         device=get_device(),
+        clip_norm=cfg["async"].get("clip_norm"),
+        tau_max=cfg["async"].get("tau_max"),
     )
+    
+    server._method_params = {
+        "method": "FedAsync",
+        "alpha": float(cfg.get("partition_alpha", 0.5)),
+        "K": int(cfg["clients"]["concurrent"]),
+        "timeout": float(cfg["eval"]["interval_seconds"]),
+        "m": int(cfg["clients"]["total"]),
+        "seed": seed,
+    }
 
     # ---- derive per-client delays to simulate heterogeneity ----
     n = int(cfg["clients"]["total"])
