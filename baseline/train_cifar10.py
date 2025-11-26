@@ -38,11 +38,11 @@ def main():
     device = get_device()
     mean, std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
 
-    train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(mean, std)])
-    val_test_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
+    train_tf = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(mean, std)])
+    val_test_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
 
     train_full = datasets.CIFAR10(args.data_dir, train=True, download=True, transform=None)
-    test_dataset = datasets.CIFAR10(args.data_dir, train=False, download=True, transform=val_test_transform)
+    test_dataset = datasets.CIFAR10(args.data_dir, train=False, download=True, transform=val_test_tf)
 
     indices = torch.randperm(len(train_full), generator=torch.Generator().manual_seed(args.seed)).tolist()
     train_size = int(0.8 * len(train_full))
@@ -52,8 +52,8 @@ def main():
         def __init__(self, d, i, t): self.d, self.i, self.t = d, i, t
         def __len__(self): return len(self.i)
         def __getitem__(self, idx): img, tgt = self.d[self.i[idx]]; return (self.t(img), tgt) if self.t else (img, tgt)
-    train_dataset = SubsetDataset(train_full, train_indices, train_transform)
-    val_dataset = SubsetDataset(train_full, val_indices, val_test_transform)
+    train_dataset = SubsetDataset(train_full, train_indices, train_tf)
+    val_dataset = SubsetDataset(train_full, val_indices, val_test_tf)
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=args.batch, shuffle=False, num_workers=0)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False, num_workers=0)
@@ -97,7 +97,7 @@ def main():
         model.eval()
         val_acc, test_acc = eval_acc(val_loader), eval_acc(test_loader)
         with open(logs_base / "metrics.csv", "a", newline="") as f:
-            csv.writer(f).writerow([f"{elapsed:.3f}", epoch, f"{train_loss:.6f}", f"{val_acc:.6f}", f"{test_acc:.6f}", f"{args.lr:.6f}", f"{args.wd:.6f}", args.batch, args.seed])
+            csv.writer(f).writerow([f"{time.time()-start_time:.3f}", epoch, f"{train_loss:.6f}", f"{val_acc:.6f}", f"{test_acc:.6f}", f"{args.lr:.6f}", f"{args.wd:.6f}", args.batch, args.seed])
         print(f"[epoch {epoch}/{args.epochs}] train_loss={train_loss:.6f} val_acc={val_acc:.6f} test_acc={test_acc:.6f}", flush=True)
 
 if __name__ == "__main__":
