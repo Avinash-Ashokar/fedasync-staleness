@@ -14,3 +14,6 @@ checkpoints/
 
 # Ignore .venv folder
 .venv/
+
+# Personal file created to keep track of my tasks
+instructions.md
