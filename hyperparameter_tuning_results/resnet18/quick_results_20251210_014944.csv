@@ -4,3 +4,4 @@ lr,batch_size,weight_decay,optimizer,momentum,best_test_acc,best_epoch,final_tes
 0.001,64,0.0001,adam,0.0,89.8,30,89.8,92.71
 0.001,64,0.0001,sgd,0.9,86.02,29,85.77,89.488
 0.001,128,0.0,adam,0.0,90.83,29,90.35,97.156
+0.001,128,0.0,sgd,0.9,82.07,30,82.07,84.476
