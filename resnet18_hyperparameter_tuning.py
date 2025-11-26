@@ -53,16 +53,11 @@ def get_cifar10_dataloaders(data_dir: str, batch_size: int):
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
     return train_loader, test_loader
 
-# Model definition (ResNet-18)
-def build_resnet18(num_classes: int = 10) -> nn.Module:
-    from torchvision import models
-    m = models.resnet18(weights=None)
-    m.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-    m.maxpool = nn.Identity()
-    in_features = m.fc.in_features
-    m.fc = nn.Linear(in_features, num_classes)
-    m.num_classes = num_classes
-    return m
+# Import ResNet-18 from utils
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.model import build_resnet18
 
 # Training function
 def train_model(model: nn.Module, train_loader: DataLoader, test_loader: DataLoader, config: dict, device: torch.device):
