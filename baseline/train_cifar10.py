@@ -49,13 +49,9 @@ def main():
     train_indices, val_indices = indices[:train_size], indices[train_size:]
 
     class SubsetDataset:
-        def __init__(self, dataset, indices, transform):
-            self.dataset, self.indices, self.transform = dataset, indices, transform
-        def __len__(self): return len(self.indices)
-        def __getitem__(self, idx):
-            img, target = self.dataset[self.indices[idx]]
-            return (self.transform(img), target) if self.transform else (img, target)
-
+        def __init__(self, d, i, t): self.d, self.i, self.t = d, i, t
+        def __len__(self): return len(self.i)
+        def __getitem__(self, idx): img, tgt = self.d[self.i[idx]]; return (self.t(img), tgt) if self.t else (img, tgt)
     train_dataset = SubsetDataset(train_full, train_indices, train_transform)
     val_dataset = SubsetDataset(train_full, val_indices, val_test_transform)
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=0)
@@ -70,12 +66,10 @@ def main():
 
     logs_base = Path("logs") / "avinash" / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_baseline"
     logs_base.mkdir(parents=True, exist_ok=True)
-    commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     csv_header = "time_sec,epoch,train_loss,val_acc,test_acc,lr,wd,batch,seed"
     with open(logs_base / "COMMIT.txt", "w") as f:
-        f.write(f"{commit_hash},{csv_header}\n")
-    csv_path = logs_base / "metrics.csv"
-    with open(csv_path, "w", newline="") as f:
+        f.write(f"{subprocess.check_output(['git','rev-parse','--short','HEAD'],text=True).strip()},{csv_header}\n")
+    with open(logs_base / "metrics.csv", "w", newline="") as f:
         csv.writer(f).writerow(csv_header.split(","))
 
     start_time = time.time()
@@ -93,19 +87,16 @@ def main():
         train_loss = train_loss_sum / train_count
 
         def eval_acc(loader):
-            correct, total = 0, 0
+            c, t = 0, 0
             with torch.no_grad():
                 for x, y in loader:
-                    x, y = x.to(device), y.to(device)
-                    correct += (model(x).argmax(1) == y).sum().item()
-                    total += y.size(0)
-            return correct / total
+                    c += (model(x.to(device)).argmax(1) == y.to(device)).sum().item()
+                    t += y.size(0)
+            return c / t
 
         model.eval()
         val_acc, test_acc = eval_acc(val_loader), eval_acc(test_loader)
-        elapsed = time.time() - start_time
-
-        with open(csv_path, "a", newline="") as f:
+        with open(logs_base / "metrics.csv", "a", newline="") as f:
             csv.writer(f).writerow([f"{elapsed:.3f}", epoch, f"{train_loss:.6f}", f"{val_acc:.6f}", f"{test_acc:.6f}", f"{args.lr:.6f}", f"{args.wd:.6f}", args.batch, args.seed])
         print(f"[epoch {epoch}/{args.epochs}] train_loss={train_loss:.6f} val_acc={val_acc:.6f} test_acc={test_acc:.6f}", flush=True)
 
