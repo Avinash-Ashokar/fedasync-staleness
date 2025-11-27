@@ -38,7 +38,7 @@ def main():
     device = get_device()
     mean, std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
 
-    train_tf = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(mean, std)])
+    train_tf = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(mean, std), transforms.RandomErasing(p=0.25)])
     val_test_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
 
     train_full = datasets.CIFAR10(args.data_dir, train=True, download=True, transform=None)
@@ -59,8 +59,9 @@ def main():
 
     model = models.squeezenet1_1(weights=None)
     model.classifier[1] = nn.Conv2d(512, 10, kernel_size=1)
-    model, criterion = model.to(device), nn.CrossEntropyLoss()
+    model, criterion = model.to(device), nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)
 
     logs_base = Path("logs") / "avinash" / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_baseline"
     logs_base.mkdir(parents=True, exist_ok=True)
@@ -96,5 +97,6 @@ def main():
         with open(logs_base / "metrics.csv", "a", newline="") as f:
             csv.writer(f).writerow([f"{time.time()-start_time:.3f}", epoch, f"{train_loss:.6f}", f"{val_acc:.6f}", f"{test_acc:.6f}", f"{args.lr:.6f}", f"{args.wd:.6f}", args.batch, args.seed])
         print(f"[epoch {epoch}/{args.epochs}] train_loss={train_loss:.6f} val_acc={val_acc:.6f} test_acc={test_acc:.6f}", flush=True)
+        scheduler.step()
 
 if __name__ == "__main__": main()
