@@ -1,7 +1,7 @@
 buff:
   buffer_size: 8
   buffer_timeout_s: 0.5
-  clip_norm: null
+  clip_norm: 10.0  # sanity run: increased from null
   eta: 0.00125
   staleness_alpha: 0.5
   staleness_type: poly
@@ -24,7 +24,7 @@ clients:
   straggler_fraction: 0.0
   straggler_scale: 3.0
   struggle_percent: 30
-  total: 20
+  total: 10  # sanity run: m=10
   weight_decay: 5e-4
 data:
   alpha_list:
@@ -46,9 +46,9 @@ io:
   global_log_csv: ./logs/FedBuff.csv
   logs_dir: ./logs
   results_dir: ./results
-partition_alpha: 0.5
+partition_alpha: 0.1  # sanity run: α=0.1
 seed: 1
 server_runtime:
   client_delay: 0.0
 train:
-  max_rounds: 300
+  max_rounds: 40  # sanity run: 40 flushes
