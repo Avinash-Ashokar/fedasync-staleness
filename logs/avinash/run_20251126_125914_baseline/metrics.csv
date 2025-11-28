@@ -1,0 +1,2 @@
+time_sec,epoch,train_loss,val_acc,test_acc,lr,wd,batch,seed
+9.633,1,2.300218,0.097300,0.100000,0.100000,0.000500,128,42

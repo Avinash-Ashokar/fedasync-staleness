@@ -1,0 +1,3 @@
+[env] python=3.13.7 torch=2.9.0 mps=True cuda=False
+[epoch 1/2] train_loss=2.301741 val_acc=0.150400 test_acc=0.145900
+[epoch 2/2] train_loss=2.301751 val_acc=0.097300 test_acc=0.100000

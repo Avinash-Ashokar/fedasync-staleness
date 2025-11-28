@@ -1,0 +1,44 @@
+data:
+  dataset: cifar10
+  data_dir: ./data
+  num_classes: 10
+clients:
+  total: 10
+  concurrent: 5
+  local_epochs: 5
+  batch_size: 128
+  lr: 0.01
+  momentum: 0.9
+  weight_decay: 5e-4
+  straggler_fraction: 0.0
+  straggler_scale: 3.0
+  struggle_percent: 0
+  delay_slow_range:
+  - 0.0
+  - 0.0
+  delay_fast_range:
+  - 0.0
+  - 0.0
+  jitter_per_round: 0.0
+  fix_delays_per_client: true
+buff:
+  buffer_size: 5
+  buffer_timeout_s: 0.0
+  use_sample_weighing: true
+  eta: 0.5
+eval:
+  interval_seconds: 0.5
+  target_accuracy: 0.8
+train:
+  max_rounds: 100
+partition_alpha: 10.0
+seed: 1
+server_runtime:
+  client_delay: 0.0
+io:
+  checkpoints_dir: ./checkpoints/FedBuff
+  logs_dir: ./logs
+  results_dir: ./results
+  global_log_csv: ./logs/FedBuff.csv
+  client_participation_csv: ./logs/FedBuffClientParticipation.csv
+  final_model_path: ./results/FedBuffModel.pt

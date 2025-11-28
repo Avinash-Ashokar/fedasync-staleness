@@ -11,7 +11,7 @@ from torchvision import datasets, transforms
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from utils.model import build_squeezenet, state_to_list, list_to_state
+from utils.model import build_resnet18, state_to_list, list_to_state
 from utils.helper import get_device
 import random
 
@@ -105,7 +105,7 @@ class LocalAsyncClient:
         self.cfg = cfg
         self.device = get_device()
 
-        base = build_squeezenet(num_classes=cfg["data"]["num_classes"], pretrained=False)
+        base = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
         self.lit = LitCifar(base, lr=float(cfg["clients"]["lr"]))
 
         self.loader = DataLoader(subset, batch_size=int(cfg["clients"]["batch_size"]),

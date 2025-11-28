@@ -1,0 +1,1 @@
+39174b2,time_sec,epoch,train_loss,val_acc,test_acc,lr,wd,batch,seed

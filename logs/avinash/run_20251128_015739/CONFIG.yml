@@ -1,0 +1,61 @@
+# ---- Data ----
+data:
+  dataset: cifar10
+  data_dir: ./data
+  num_classes: 10
+
+# ---- Clients ----
+clients:
+  total: 10
+  concurrent: 5
+  # TRAINING
+  local_epochs: 5          # Increased for ResNet-18 + augmentation
+  batch_size: 128
+  lr: 0.01                 # Lowered from 0.1 for stability in FL
+  momentum: 0.9            # Re-enabled for ResNet-18
+  weight_decay: 5e-4
+  straggler_fraction: 0.0  # keep no simulated stragglers for baseline
+  straggler_scale: 3.0
+
+  # --- heterogeneity controls ---
+  struggle_percent: 0      # <--- disable heterogeneity for debugging
+  delay_slow_range: [0.0, 0.0]
+  delay_fast_range: [0.0, 0.0]
+  jitter_per_round: 0.0
+  fix_delays_per_client: true
+
+# ---- Buffered FedBuff ----
+buff:
+  buffer_size: 5          # = concurrent, so it's almost synchronous FedAvg
+  buffer_timeout_s: 0.0   # flush as soon as buffer is full
+  use_sample_weighing: true
+  eta: 0.5                # Increased from 0.2 to apply more of aggregated updates
+
+# ---- Evaluation / stopping ----
+eval:
+  interval_seconds: 0.5      # evaluate/log every T seconds
+  target_accuracy: 0.8     # stop when global test_acc >= this value
+
+# ---- Safety cap on merges (optional) ----
+train:
+  max_rounds: 30         # Quick test with adjusted hyperparameters
+
+# ---- Partitioning ----
+partition_alpha: 0.5      # <--- TEMPORARILY make data less extreme non-IID
+
+# ---- Reproducibility ----
+seed: 1
+
+# ---- Runtime / I/O ----
+server_runtime:
+  client_delay: 0.0   # extra global delay added on every client before training
+
+io:
+  checkpoints_dir: ./checkpoints/FedBuff
+  logs_dir: ./logs
+  results_dir: ./results
+
+  # configurable file paths
+  global_log_csv: ./logs/FedBuff.csv
+  client_participation_csv: ./logs/FedBuffClientParticipation.csv
+  final_model_path: ./results/FedBuffModel.pt

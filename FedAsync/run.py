@@ -23,7 +23,7 @@ import yaml
 
 from FedAsync.client import LocalAsyncClient
 from FedAsync.server import AsyncFedServer
-from utils.model import build_squeezenet
+from utils.model import build_resnet18
 from utils.partitioning import DataDistributor
 from utils.helper import set_seed, get_device
 
@@ -53,7 +53,7 @@ def main():
     )
 
     # Build server with periodic eval/log and accuracy-based stopping
-    global_model = build_squeezenet(num_classes=cfg["data"]["num_classes"], pretrained=False)
+    global_model = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
     server = AsyncFedServer(
         global_model=global_model,
         total_train_samples=len(dd.train_dataset),

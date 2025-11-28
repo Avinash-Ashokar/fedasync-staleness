@@ -21,7 +21,7 @@ from torchvision import datasets, models, transforms
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.helper import get_device, set_seed
-from utils.model import build_squeezenet
+from utils.model import build_resnet18
 
 print(f"[env] python={sys.version.split()[0]} torch={torch.__version__} mps={getattr(torch.backends.mps,'is_available',lambda:False)()} cuda={torch.cuda.is_available()}", flush=True)
 
@@ -58,7 +58,7 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=args.batch, shuffle=False, num_workers=0)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False, num_workers=0)
 
-    model = build_squeezenet(num_classes=10, pretrained=False)
+    model = build_resnet18(num_classes=10, pretrained=False)
     model, criterion = model.to(device), nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)

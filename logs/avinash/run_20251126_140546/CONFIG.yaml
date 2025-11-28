@@ -1,0 +1,52 @@
+async:
+  c: 0.5
+  clip_norm: null
+  eta: 0.00125
+  fedasync_mixing_alpha: 0.5
+  tau_max: null
+  use_sample_weighing: true
+clients:
+  batch_size: 128
+  concurrent: 8
+  delay_fast_range:
+  - 0.0
+  - 0.2
+  delay_slow_range:
+  - 0.8
+  - 2.0
+  fix_delays_per_client: true
+  jitter_per_round: 0.1
+  local_epochs: 1
+  lr: 0.0125
+  momentum: 0.9
+  straggler_fraction: 0.0
+  straggler_scale: 3.0
+  struggle_percent: 30
+  total: 20
+  weight_decay: 5e-4
+data:
+  alpha_list:
+  - 0.1
+  - 1.0
+  - 10.0
+  - 100.0
+  - 1000.0
+  data_dir: ./data
+  dataset: cifar10
+  num_classes: 10
+eval:
+  interval_seconds: 0.5
+  target_accuracy: 0.8
+io:
+  checkpoints_dir: ./checkpoints/FedAsync
+  client_participation_csv: ./logs/FedAsyncClientParticipation.csv
+  final_model_path: ./results/FedAsyncModel.pt
+  global_log_csv: ./logs/FedAsync.csv
+  logs_dir: ./logs
+  results_dir: ./results
+partition_alpha: 0.1
+seed: 1
+server_runtime:
+  client_delay: 0.0
+train:
+  max_rounds: 300

@@ -1,0 +1,60 @@
+# ---- Data ----
+data:
+  dataset: cifar10
+  data_dir: ./data
+  num_classes: 10
+
+# ---- Clients ----
+clients:
+  total: 10
+  concurrent: 5
+  local_epochs: 3
+  batch_size: 128
+  lr: 0.0125
+  momentum: 0.9
+  weight_decay: 5e-4
+  straggler_fraction: 0.0
+  straggler_scale: 3.0
+
+  # --- heterogeneity controls ---
+  struggle_percent: 30          # % of all clients that are slow
+  delay_slow_range: [0.8, 2.0]  # seconds, Uniform[a, b] for slow clients
+  delay_fast_range: [0.0, 0.2]  # seconds, Uniform[a, b] for fast/normal clients
+  jitter_per_round: 0.1         # extra +/- seconds each local fit; 0 disables
+  fix_delays_per_client: true   # true: sample once per client; false: resample every fit
+
+# ---- Buffered FedBuff ----
+buff:
+  buffer_size: 5
+  buffer_timeout_s: 10.0
+  use_sample_weighing: true
+  eta: 1.0  # FedAvg-style: replace global with aggregated. Use 0.1-0.05 for relaxed updates with more rounds
+
+# ---- Evaluation / stopping ----
+eval:
+  interval_seconds: 0.5      # evaluate/log every T seconds
+  target_accuracy: 0.8     # stop when global test_acc >= this value
+
+# ---- Safety cap on merges (optional) ----
+train:
+  max_rounds: 20
+
+# ---- Partitioning ----
+partition_alpha: 0.1
+
+# ---- Reproducibility ----
+seed: 1
+
+# ---- Runtime / I/O ----
+server_runtime:
+  client_delay: 0.0   # extra global delay added on every client before training
+
+io:
+  checkpoints_dir: ./checkpoints/FedBuff
+  logs_dir: ./logs
+  results_dir: ./results
+
+  # configurable file paths
+  global_log_csv: ./logs/FedBuff.csv
+  client_participation_csv: ./logs/FedBuffClientParticipation.csv
+  final_model_path: ./results/FedBuffModel.pt

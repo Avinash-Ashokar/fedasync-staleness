@@ -1,0 +1,35 @@
+[env] python=3.13.7 torch=2.9.0 mps=True cuda=False
+Traceback (most recent call last):
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/baseline/train_cifar10.py", line 102, in <module>
+    if __name__ == "__main__": main()
+                               ~~~~^^
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/baseline/train_cifar10.py", line 77, in main
+    for x, y in train_loader:
+                ^^^^^^^^^^^^
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torch/utils/data/dataloader.py", line 732, in __next__
+    data = self._next_data()
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torch/utils/data/dataloader.py", line 788, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py", line 52, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+            ~~~~~~~~~~~~^^^^^
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/baseline/train_cifar10.py", line 53, in __getitem__
+    def __getitem__(self, idx): img, tgt = self.d[self.i[idx]]; return (self.t(img), tgt) if self.t else (img, tgt)
+                                                                        ~~~~~~^^^^^
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torchvision/transforms/transforms.py", line 95, in __call__
+    img = t(img)
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torchvision/transforms/autoaugment.py", line 279, in forward
+    img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torchvision/transforms/autoaugment.py", line 83, in _apply_op
+    img = F.equalize(img)
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torchvision/transforms/functional.py", line 1515, in equalize
+    return F_t.equalize(img)
+           ~~~~~~~~~~~~^^^^^
+  File "/Users/avinashashokar/Documents/college/dml/project/fedasync-staleness/.venv/lib/python3.13/site-packages/torchvision/transforms/_functional_tensor.py", line 895, in equalize
+    raise TypeError(f"Only torch.uint8 image tensors are supported, but found {img.dtype}")
+TypeError: Only torch.uint8 image tensors are supported, but found torch.float32

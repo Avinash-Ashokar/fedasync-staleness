@@ -1,0 +1,2 @@
+client_id,local_train_loss,local_train_acc,local_test_loss,local_test_acc,total_agg
+1,1.392878,0.586814,2.092381,0.355500,0

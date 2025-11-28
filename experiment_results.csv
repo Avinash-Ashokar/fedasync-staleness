@@ -1,0 +1,4 @@
+exp_id,alpha,local_epochs,eta,buffer_size,buffer_timeout,stragglers,success,run_folder,duration_min,timestamp
+A1,0.1,5,0.5,5,0.0,0,False,,60.00261381467183,2025-11-28 04:43:06
+A2,1.0,5,0.5,5,0.0,0,False,,60.00366246700287,2025-11-28 05:43:06
+A3,10.0,5,0.5,5,0.0,0,False,,60.0019825498263,2025-11-28 06:43:06
