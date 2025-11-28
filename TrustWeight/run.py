@@ -11,6 +11,7 @@ from torchvision import datasets, transforms
 from .config import load_config
 from .client import AsyncClient
 from .server import AsyncServer
+from utils.partitioning import DataDistributor  # <-- NEW: use external partitioner
 
 
 def _set_seed(seed: int) -> None:
@@ -24,7 +25,7 @@ def _set_seed(seed: int) -> None:
 
 
 def _build_train_dataset(data_dir: str) -> datasets.CIFAR10:
-    """Create the CIFAR-10 training dataset with standard transforms."""
+    """(Kept for compatibility; no longer used for partitioning.)"""
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -38,24 +39,6 @@ def _build_train_dataset(data_dir: str) -> datasets.CIFAR10:
     return ds
 
 
-def _partition_dirichlet(
-    num_examples: int,
-    num_clients: int,
-    alpha: float,
-) -> List[List[int]]:
-    """Non-iid Dirichlet partitioning over example indices.
-
-    Returns:
-        A list of `num_clients` index lists; each list is the data indices for that client.
-    """
-    indices = np.arange(num_examples)
-    props = np.random.dirichlet(alpha=[alpha] * num_clients)
-    props = props / props.sum()
-    cuts = (np.cumsum(props) * num_examples).astype(int)
-    splits = np.split(indices, cuts[:-1])
-    return [split.tolist() for split in splits]
-
-
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
@@ -64,14 +47,22 @@ def main() -> None:
     _set_seed(cfg.seed)
 
     # --------------------- dataset & partition --------------------
-    train_ds = _build_train_dataset(cfg.data.data_dir)
-    num_examples = len(train_ds)
-
-    partitions = _partition_dirichlet(
-        num_examples=num_examples,
+    # Use DataDistributor as the ONLY mechanism to distribute data.
+    # This respects the partitioning behavior defined in utils.partitioning.
+    distributor = DataDistributor(
+        dataset_name=cfg.data.dataset,   # e.g. "cifar10"
+        data_dir=cfg.data.data_dir,
+    )
+    distributor.distribute_data(
         num_clients=cfg.clients.total,
         alpha=cfg.partition_alpha,
+        seed=cfg.seed,
     )
+
+    # Convert the dict {client_id: [indices]} into the list-of-lists expected below
+    partitions = [
+        distributor.partitions[cid] for cid in range(cfg.clients.total)
+    ]
 
     # --------------------- create server -------------------------
     # AsyncServer encapsulates the trust-weighted async aggregation logic + logging.
@@ -103,7 +94,7 @@ def main() -> None:
     # --------------------- start client threads ------------------
     threads: List[threading.Thread] = []
     for cl in clients:
-        t = threading.Thread(target=client_loop, args=(cl,), daemon=False)
+        t = threading.Thread(target=client_loop, args=(cl,), daemon=True)
         t.start()
         threads.append(t)
 

@@ -1,7 +1,6 @@
 # Lightning-free async federated client for CIFAR-10
 import time
 import random
-from pathlib import Path
 from typing import Sequence, Tuple
 
 import torch
@@ -19,7 +18,7 @@ from .config import GlobalConfig
 
 
 def _build_transform() -> transforms.Compose:
-    # Simple CIFAR-10 preprocessing
+    # Simple CIFAR-10 preprocessing (same as before)
     return transforms.Compose(
         [
             transforms.ToTensor(),
@@ -40,6 +39,12 @@ def _make_dataloader(
         transform=_build_transform(),
     )
     subset = Subset(dataset, indices)
+
+    # Safety: in case partitioning ever returns an empty list for a client
+    if len(subset) == 0:
+        return DataLoader(subset, batch_size=1, shuffle=False, num_workers=0)
+
+    # num_workers=0 to avoid multiprocessing issues on macOS / Python 3.13
     return DataLoader(subset, batch_size=batch_size, shuffle=True, num_workers=0)
 
 

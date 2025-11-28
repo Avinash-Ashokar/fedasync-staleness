@@ -27,6 +27,7 @@ def _testloader(root: str, batch_size: int = 256) -> DataLoader:
         ]
     )
     ds = datasets.CIFAR10(root=root, train=False, download=True, transform=transform)
+    # num_workers=0 to avoid multiprocessing / SemLock issues
     return DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
 

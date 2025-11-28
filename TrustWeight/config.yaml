@@ -4,27 +4,27 @@ data:
   num_classes: 10
 
 clients:
-  total: 20
-  concurrent: 5
-  local_epochs: 1
-  batch_size: 32
-  lr: 0.01
+  total: 3
+  concurrent: 3
+  local_epochs: 10
+  batch_size: 128
+  lr: 0.1
 
   # Straggler simulation
-  struggle_percent: 30          # % of clients treated as slow
+  struggle_percent: 10         # % of clients treated as slow
   delay_slow_range: [0.8, 2.0]  # seconds
   delay_fast_range: [0.0, 0.2]
   jitter_per_round: 0.05
   fix_delays_per_client: true   # keep each client's slow/fast identity
 
 eval:
-  interval_seconds: 15          # (not used for logging now but kept for compatibility)
-  target_accuracy: 0.60         # stop training when achieved
+  interval_seconds: 60          # (not used for logging now but kept for compatibility)
+  target_accuracy: 0.80         # stop training when achieved
 
 train:
-  max_rounds: 10                # stop after this many aggregations
+  max_rounds: 2000               # stop after this many aggregations
 
-partition_alpha: 0.5            # Dirichlet α for non-IID partitioning
+partition_alpha: 0.8            # Dirichlet α for non-IID partitioning
 seed: 42
 
 server_runtime:
