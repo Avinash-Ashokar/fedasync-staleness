@@ -50,12 +50,10 @@ class AsyncFedServer:
         max_rounds: Optional[int] = None,
         eval_interval_s: int = 15,
         data_dir: str = "./data",
-        checkpoints_dir: str = "./checkpoints",
         logs_dir: str = "./logs",
         global_log_csv: Optional[str] = None,
         client_participation_csv: Optional[str] = None,
         final_model_path: Optional[str] = None,
-        resume: bool = True,
         device: Optional[torch.device] = None,
     ):
         self.model = global_model
@@ -74,7 +72,6 @@ class AsyncFedServer:
 
         # I/O
         self.data_dir = data_dir
-        self.ckpt_dir = Path(checkpoints_dir); self.ckpt_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir = Path(logs_dir); self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Paths supplied by config (with defaults)
@@ -109,30 +106,9 @@ class AsyncFedServer:
         self._lock = threading.Lock()
         self._stop = False
         self.t_round = 0                     # increments on every merge
-        self._log_count = 0                  # increments on each periodic CSV write
         self.testloader = _testloader(self.data_dir)
         self._train_loss_acc_accum: List[Tuple[float, float, int]] = []  # (loss, acc, n) since last eval
         self._start_ts = time.time()
-
-        if resume:
-            self._maybe_resume()
-
-    # ---------- persistence ----------
-    def _ckpt_file(self) -> Path:
-        return self.ckpt_dir / "server_last.ckpt"
-
-    def _maybe_resume(self) -> None:
-        ck = self._ckpt_file()
-        if ck.exists():
-            blob = torch.load(ck, map_location="cpu")
-            state = list_to_state(self.template, blob["global_params"])
-            self.model.load_state_dict(state, strict=True)
-            self.t_round = int(blob["t_round"])
-            print(f"[resume] Loaded server checkpoint at total_agg={self.t_round}")
-
-    def _save_ckpt(self) -> None:
-        sd = state_to_list(self.model.state_dict())
-        torch.save({"t_round": self.t_round, "global_params": sd}, self._ckpt_file())
 
     def _save_final_model(self) -> None:
         torch.save(self.model.state_dict(), self.final_model_path)
@@ -173,7 +149,6 @@ class AsyncFedServer:
             self.model.load_state_dict(new_state, strict=True)
 
             self.t_round += 1
-            self._save_ckpt()
 
             # Evaluate immediately after this aggregation and log like TrustWeight
             test_loss, test_acc = _evaluate(self.model, self.testloader, self.device)
@@ -245,12 +220,6 @@ class AsyncFedServer:
         print(f"[LOG] total_agg={self.t_round} "
               f"avg_train_loss={avg_train_loss:.4f} avg_train_acc={avg_train_acc:.4f} "
               f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} time={now:.1f}s")
-
-        # extra checkpoint every 100 CSV logs
-        self._log_count += 1
-        if self._log_count % 100 == 0:
-            path = self.ckpt_dir / f"global_log{self._log_count}_t{self.t_round}.pt"
-            torch.save(self.model.state_dict(), path)
 
         if test_acc >= self.target_accuracy:
             self._stop = True

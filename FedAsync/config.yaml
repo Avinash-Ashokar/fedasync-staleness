@@ -8,8 +8,8 @@ data:
 clients:
   total: 20
   concurrent: 5
-  local_epochs: 1
-  batch_size: 64
+  local_epochs: 2
+  batch_size: 128
   lr: 0.005
 
   # --- heterogeneity controls ---
@@ -21,8 +21,8 @@ clients:
 
 # ---- Async FedAsync ----
 async:
-  c: 0.9
-  fedasync_mixing_alpha: 0.5
+  c: 0.3
+  fedasync_mixing_alpha: 0.9
   use_sample_weighing: true
 
 # ---- Evaluation / stopping ----
