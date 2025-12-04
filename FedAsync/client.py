@@ -9,9 +9,8 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
 
-from utils.model import build_squeezenet, state_to_list, list_to_state
+from utils.model import build_resnet18, state_to_list, list_to_state
 from utils.helper import get_device
 import random
 
@@ -105,7 +104,7 @@ class LocalAsyncClient:
         self.cfg = cfg
         self.device = get_device()
 
-        base = build_squeezenet(num_classes=cfg["data"]["num_classes"], pretrained=False)
+        base = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
         self.lit = LitCifar(base, lr=float(cfg["clients"]["lr"]))
 
         self.loader = DataLoader(subset, batch_size=int(cfg["clients"]["batch_size"]),
@@ -174,24 +173,22 @@ class LocalAsyncClient:
         # emulate heterogeneous device speed
         self._sleep_delay()
 
-        # train for local_epochs with optional resume
+        # train for local_epochs; checkpoints disabled for async runs
         epochs = int(self.cfg["clients"]["local_epochs"])
-        callbacks = [ModelCheckpoint(dirpath=str(self.client_dir),
-                                     filename="last", save_last=True, save_top_k=0)]
         trainer = pl.Trainer(
             max_epochs=epochs,
             accelerator=self.accelerator,
             devices=1,
-            enable_checkpointing=True,
+            enable_checkpointing=False,
             logger=False,
             enable_model_summary=False,
             num_sanity_val_steps=0,
             enable_progress_bar=False,
-            callbacks=callbacks,
+            callbacks=[],
         )
         start = time.time()
-        ckpt = self.ckpt_path if Path(self.ckpt_path).exists() else None
-        trainer.fit(self.lit, train_dataloaders=self.loader, ckpt_path=ckpt)
+        # ckpt = self.ckpt_path if Path(self.ckpt_path).exists() else None
+        trainer.fit(self.lit, train_dataloaders=self.loader)
         duration = time.time() - start
 
         # local metrics

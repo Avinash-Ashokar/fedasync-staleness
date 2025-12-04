@@ -23,7 +23,7 @@ import yaml
 
 from FedAsync.client import LocalAsyncClient
 from FedAsync.server import AsyncFedServer
-from utils.model import build_squeezenet
+from utils.model import build_resnet18
 from utils.partitioning import DataDistributor
 from utils.helper import set_seed, get_device
 
@@ -53,7 +53,7 @@ def main():
     )
 
     # Build server with periodic eval/log and accuracy-based stopping
-    global_model = build_squeezenet(num_classes=cfg["data"]["num_classes"], pretrained=False)
+    global_model = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
     server = AsyncFedServer(
         global_model=global_model,
         total_train_samples=len(dd.train_dataset),
@@ -64,12 +64,10 @@ def main():
         max_rounds=int(cfg["train"]["max_rounds"]) if "max_rounds" in cfg["train"] else None,
         eval_interval_s=int(cfg["eval"]["interval_seconds"]),
         data_dir=cfg["data"]["data_dir"],
-        checkpoints_dir=cfg["io"]["checkpoints_dir"],
         logs_dir=cfg["io"]["logs_dir"],
         global_log_csv=cfg["io"].get("global_log_csv"),
         client_participation_csv=cfg["io"].get("client_participation_csv"),
         final_model_path=cfg["io"].get("final_model_path"),
-        resume=True,
         device=get_device(),
     )
 
@@ -120,9 +118,6 @@ def main():
             if not cont:
                 break
             time.sleep(0.05)
-
-    # Start periodic evaluation/logging
-    server.start_eval_timer()
 
     # launch clients
     threads = []
