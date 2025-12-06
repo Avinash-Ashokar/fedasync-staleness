@@ -112,7 +112,17 @@ class LocalAsyncClient:
         base = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
         self.lit = LitCifar(base, lr=float(cfg["clients"]["lr"]))
 
-        self.loader = DataLoader(subset, batch_size=int(cfg["clients"]["batch_size"]),
+        # Rebuild a training subset with CIFAR-style augmentation (keeps partition indices, avoids touching partitioner)
+        indices = subset.indices if hasattr(subset, "indices") else list(range(len(subset)))
+        train_tfm = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+        ])
+        train_ds = datasets.CIFAR10(cfg["data"]["data_dir"], train=True, download=False, transform=train_tfm)
+        aug_subset = Subset(train_ds, indices)
+        self.loader = DataLoader(aug_subset, batch_size=int(cfg["clients"]["batch_size"]),
                                  shuffle=True, num_workers=0)
 
         self.client_dir = Path(work_dir) / f"cid_{cid}"

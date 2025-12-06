@@ -151,13 +151,23 @@ class AsyncFedServer:
         self.testloader = _testloader(self.data_dir)
         self._train_loss_acc_accum: List[Tuple[float, float, int]] = []  # (loss, acc, n) since last eval
         # Async evaluation state
-        self._eval_executor = ThreadPoolExecutor(max_workers=1)
+        self._eval_executor: Optional[ThreadPoolExecutor] = ThreadPoolExecutor(max_workers=1)
         self._async_eval_future: Optional[Future] = None
         self._init_async_eval_log()
         self._last_eval: Tuple[float, float] = (0.0, 0.0)
 
     def _save_final_model(self) -> None:
         torch.save(self.model.state_dict(), self.final_model_path)
+
+    def _shutdown_eval_executor(self) -> None:
+        """Release async eval thread quickly when stopping."""
+        if self._eval_executor is None:
+            return
+        try:
+            self._eval_executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
+        self._eval_executor = None
 
     # ---------- client/server API ----------
     def get_global(self):
@@ -176,48 +186,52 @@ class AsyncFedServer:
         test_loss: float,
         test_acc: float,
     ) -> None:
+        cleanup_requested = False
         with self._lock:
             if self._stop:
                 return
             if self.max_rounds is not None and self.t_round >= self.max_rounds:
                 self._stop = True
-                return
+                cleanup_requested = True
+            else:
+                # FedAsync merge (fixed alpha, still logs staleness for visibility)
+                staleness = max(0, self.t_round - base_version)
+                eff = self.alpha
 
-            # FedAsync merge (fixed alpha, still logs staleness for visibility)
-            staleness = max(0, self.t_round - base_version)
-            eff = self.alpha
+                g = state_to_list(self.model.state_dict())
+                merged = [(1.0 - eff) * gi + eff * ci for gi, ci in zip(g, new_params)]
+                new_state = list_to_state(self.template, merged)
+                self.model.load_state_dict(new_state, strict=True)
 
-            g = state_to_list(self.model.state_dict())
-            merged = [(1.0 - eff) * gi + eff * ci for gi, ci in zip(g, new_params)]
-            new_state = list_to_state(self.template, merged)
-            self.model.load_state_dict(new_state, strict=True)
+                self.t_round += 1
 
-            self.t_round += 1
+                # Client participation CSV (append staleness like TrustWeight)
+                with self.participation_csv.open("a", newline="") as f:
+                    csv.writer(f).writerow(
+                        [
+                            client_id,
+                            f"{train_loss:.6f}",
+                            f"{train_acc:.6f}",
+                            f"{test_loss:.6f}",
+                            f"{test_acc:.6f}",
+                            self.t_round,
+                            float(staleness),
+                        ]
+                    )
 
-            # Client participation CSV (append staleness like TrustWeight)
-            with self.participation_csv.open("a", newline="") as f:
-                csv.writer(f).writerow(
-                    [
-                        client_id,
-                        f"{train_loss:.6f}",
-                        f"{train_acc:.6f}",
-                        f"{test_loss:.6f}",
-                        f"{test_acc:.6f}",
-                        self.t_round,
-                        float(staleness),
-                    ]
-                )
+                # accumulate metrics since last eval tick (used by optional timer)
+                self._train_loss_acc_accum.append((float(train_loss), float(train_acc), int(num_samples)))
+                # Kick off async global eval every eval_every_aggs
+                if self.t_round % self.eval_every_aggs == 0:
+                    avg_loss, avg_acc = self._compute_avg_train()
+                    self._train_loss_acc_accum.clear()
+                    self._launch_async_eval_if_needed(self.t_round, avg_loss, avg_acc)
 
-            # accumulate metrics since last eval tick (used by optional timer)
-            self._train_loss_acc_accum.append((float(train_loss), float(train_acc), int(num_samples)))
-            # Kick off async global eval every eval_every_aggs
-            if self.t_round % self.eval_every_aggs == 0:
-                avg_loss, avg_acc = self._compute_avg_train()
-                self._train_loss_acc_accum.clear()
-                self._launch_async_eval_if_needed(self.t_round, avg_loss, avg_acc)
-
-            # only print aggregation number to console
-            print(self.t_round)
+                # only print aggregation number to console
+                print(self.t_round)
+        if cleanup_requested:
+            self._save_final_model()
+            self._shutdown_eval_executor()
 
     def should_stop(self) -> bool:
         with self._lock:
@@ -228,10 +242,7 @@ class AsyncFedServer:
             self._stop = True
             # store final model when marking stop
             self._save_final_model()
-        try:
-            self._eval_executor.shutdown(wait=False, cancel_futures=True)
-        except Exception:
-            pass
+        self._shutdown_eval_executor()
 
     # ---------- evaluation / logging ----------
     def _compute_avg_train(self) -> Tuple[float, float]:
@@ -256,6 +267,8 @@ class AsyncFedServer:
 
     def _launch_async_eval_if_needed(self, total_agg: int, avg_train_loss: float, avg_train_acc: float) -> None:
         """Schedule a non-blocking global eval every eval_every_aggs aggregations."""
+        if self._eval_executor is None:
+            return
         if total_agg % self.eval_every_aggs != 0:
             return
         if self._async_eval_future is not None and not self._async_eval_future.done():
@@ -286,6 +299,7 @@ class AsyncFedServer:
             if test_acc >= self.target_accuracy:
                 self._stop = True
                 self._save_final_model()
+                self._shutdown_eval_executor()
 
     def wait(self):
         try:
