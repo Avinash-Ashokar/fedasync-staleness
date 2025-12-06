@@ -1,6 +1,5 @@
 # Lightning-based local client, resumable checkpoints, no Flower deps
 import time
-from pathlib import Path
 from typing import List, Tuple, Optional
 
 import torch
@@ -98,7 +97,6 @@ class LocalAsyncClient:
         cid: int,
         cfg: dict,
         subset: Subset,
-        work_dir: str = "./checkpoints/clients",
         base_delay: float = 0.0,
         slow: bool = False,
         delay_ranges: Optional[tuple] = None,   # ((a_s, b_s), (a_f, b_f))
@@ -124,10 +122,6 @@ class LocalAsyncClient:
         aug_subset = Subset(train_ds, indices)
         self.loader = DataLoader(aug_subset, batch_size=int(cfg["clients"]["batch_size"]),
                                  shuffle=True, num_workers=0)
-
-        self.client_dir = Path(work_dir) / f"cid_{cid}"
-        self.client_dir.mkdir(parents=True, exist_ok=True)
-        self.ckpt_path = str(self.client_dir / "last.ckpt")
 
         # delay controls
         self.base_delay = float(base_delay)

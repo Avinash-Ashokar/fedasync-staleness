@@ -98,7 +98,6 @@ def main():
             cid=cid,
             cfg=cfg,
             subset=subset,
-            work_dir=cfg["io"]["checkpoints_dir"] + "/clients",
             base_delay=base_delay,
             slow=is_slow,
             delay_ranges=((float(a_s), float(b_s)), (float(a_f), float(b_f))),
