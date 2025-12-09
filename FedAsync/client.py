@@ -1,19 +1,15 @@
-# Lightning-based local client, resumable checkpoints, no Flower deps
 import time
-from pathlib import Path
 from typing import List, Tuple, Optional
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-
 import pytorch_lightning as pl
-# ModelCheckpoint removed - checkpointing disabled to avoid overwriting global model
+import random
 
 from utils.model import build_resnet18, state_to_list, list_to_state
 from utils.helper import get_device
-import random
 
 
 def _device_to_accelerator(device: torch.device) -> str:
@@ -54,8 +50,7 @@ class LitCifar(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore=["base_model"])
         self.model = base_model
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)  # Label smoothing for regularization
-        # Store optimizer params directly (not in hparams to avoid Lightning issues)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
         self._optimizer_lr = lr
         self._optimizer_momentum = momentum
         self._optimizer_weight_decay = weight_decay
@@ -87,7 +82,6 @@ class LitCifar(pl.LightningModule):
         return self._train_loss_sum / self._train_total, self._train_correct / self._train_total
 
     def configure_optimizers(self):
-        # Use stored optimizer params directly
         return torch.optim.SGD(
             self.parameters(),
             lr=self._optimizer_lr,
@@ -97,8 +91,6 @@ class LitCifar(pl.LightningModule):
 
 
 class LocalAsyncClient:
-    """Pull global -> Lightning local fit -> push update with averaged metrics.
-       Supports per-client slow/fast delays with optional per-round jitter."""
     def __init__(
         self,
         cid: int,
@@ -107,7 +99,7 @@ class LocalAsyncClient:
         work_dir: str = "./checkpoints/clients",
         base_delay: float = 0.0,
         slow: bool = False,
-        delay_ranges: Optional[tuple] = None,   # ((a_s, b_s), (a_f, b_f))
+        delay_ranges: Optional[tuple] = None,
         jitter: float = 0.0,
         fix_delay: bool = True,
     ):
@@ -124,19 +116,12 @@ class LocalAsyncClient:
         self.loader = DataLoader(subset, batch_size=int(cfg["clients"]["batch_size"]),
                                  shuffle=True, num_workers=0)
 
-        # Client checkpointing disabled - always start from fresh global model
-        # self.client_dir = Path(work_dir) / f"cid_{cid}"
-        # self.client_dir.mkdir(parents=True, exist_ok=True)
-        # self.ckpt_path = str(self.client_dir / "last.ckpt")
-
-        # delay controls
         self.base_delay = float(base_delay)
         self.slow = bool(slow)
         self.delay_ranges = delay_ranges
         self.jitter = float(jitter)
         self.fix_delay = bool(fix_delay)
 
-        # pre-sample fixed delay if requested
         if self.fix_delay and self.delay_ranges is not None:
             (a_s, b_s), (a_f, b_f) = self.delay_ranges
             if self.slow:
@@ -145,8 +130,6 @@ class LocalAsyncClient:
                 self.base_delay = random.uniform(float(a_f), float(b_f))
 
         self.accelerator = _device_to_accelerator(self.device)
-
-        # local test loader to compute per-client test metrics
         self.testloader = _testloader(cfg["data"]["data_dir"])
 
     def _to_list(self) -> List[torch.Tensor]:
@@ -159,13 +142,9 @@ class LocalAsyncClient:
         self.lit.to(self.device)
 
     def _sleep_delay(self):
-        # global delay from config (kept for backward compat)
         global_d = float(self.cfg.get("server_runtime", {}).get("client_delay", 0.0))
-
-        # per-client base delay
         base = self.base_delay
 
-        # if not fixed, resample each fit
         if not self.fix_delay and self.delay_ranges is not None:
             (a_s, b_s), (a_f, b_f) = self.delay_ranges
             if self.slow:
@@ -173,43 +152,35 @@ class LocalAsyncClient:
             else:
                 base = random.uniform(float(a_f), float(b_f))
 
-        # add +/- jitter
         jit = random.uniform(-self.jitter, self.jitter) if self.jitter > 0.0 else 0.0
-
         delay = max(0.0, global_d + base + jit)
         if delay > 0.0:
             time.sleep(delay)
 
     def fit_once(self, server) -> bool:
-        # pull global
         params, version = server.get_global()
         self._from_list(params)
-
-        # emulate heterogeneous device speed
         self._sleep_delay()
 
-        # train for local_epochs - always start from fresh global model
         epochs = int(self.cfg["clients"]["local_epochs"])
-        grad_clip = float(self.cfg["clients"].get("grad_clip", 1.0))  # Read from config, default to 1.0
+        grad_clip = float(self.cfg["clients"].get("grad_clip", 1.0))
         trainer = pl.Trainer(
             max_epochs=epochs,
             accelerator=self.accelerator,
             devices=1,
-            enable_checkpointing=False,  # Disable checkpointing to avoid overwriting global model
+            enable_checkpointing=False,
             logger=False,
             enable_model_summary=False,
             num_sanity_val_steps=0,
             enable_progress_bar=False,
-            callbacks=[],  # No callbacks needed for standard FL runs
-            gradient_clip_val=grad_clip,  # Gradient clipping from config
+            callbacks=[],
+            gradient_clip_val=grad_clip,
             gradient_clip_algorithm="norm",
         )
         start = time.time()
-        # Don't restore from checkpoint - always start from fresh global model
         trainer.fit(self.lit, train_dataloaders=self.loader)
         duration = time.time() - start
 
-        # local metrics
         train_loss, train_acc = self.lit.get_epoch_metrics()
         test_loss, test_acc = _evaluate(self.lit.model, self.testloader, self.device)
 

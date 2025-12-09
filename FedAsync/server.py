@@ -1,4 +1,3 @@
-# Async FedAsync server with periodic evaluation/logging and accuracy-based stopping
 import csv
 import time
 import threading
@@ -38,7 +37,6 @@ def _evaluate(model: torch.nn.Module, loader: DataLoader, device: torch.device) 
 
 
 class AsyncFedServer:
-    """FedAsync: alpha(staleness)=c/(staleness+1). Periodic eval/log. Stop on target accuracy."""
     def __init__(
         self,
         global_model: torch.nn.Module,
@@ -72,18 +70,17 @@ class AsyncFedServer:
         self.target_accuracy = float(target_accuracy)
         self.max_rounds = int(max_rounds) if max_rounds is not None else None
 
-        # I/O
         self.data_dir = data_dir
-        self.ckpt_dir = Path(checkpoints_dir); self.ckpt_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir = Path(logs_dir); self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.ckpt_dir = Path(checkpoints_dir)
+        self.ckpt_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir = Path(logs_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        # Paths supplied by config (with defaults)
         self.csv_path = Path(global_log_csv) if global_log_csv else (self.log_dir / "FedAsync.csv")
         self.participation_csv = Path(client_participation_csv) if client_participation_csv else (self.log_dir / "FedAsyncClientParticipation.csv")
         self.final_model_path = Path(final_model_path) if final_model_path else Path("./results/FedAsyncModel.pt")
         self.final_model_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Init CSV headers if files don't exist
         if not self.csv_path.exists():
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
             with self.csv_path.open("w", newline="") as f:
@@ -100,16 +97,15 @@ class AsyncFedServer:
 
         self._lock = threading.Lock()
         self._stop = False
-        self.t_round = 0                     # increments on every merge
-        self._log_count = 0                  # increments on each periodic CSV write
+        self.t_round = 0
+        self._log_count = 0
         self.testloader = _testloader(self.data_dir)
-        self._train_loss_acc_accum: List[Tuple[float, float, int]] = []  # (loss, acc, n) since last eval
+        self._train_loss_acc_accum: List[Tuple[float, float, int]] = []
         self._start_ts = time.time()
 
         if resume:
             self._maybe_resume()
 
-    # ---------- persistence ----------
     def _ckpt_file(self) -> Path:
         return self.ckpt_dir / "server_last.ckpt"
 
@@ -123,9 +119,8 @@ class AsyncFedServer:
                 self.t_round = int(blob["t_round"])
                 print(f"[resume] Loaded server checkpoint at total_agg={self.t_round}")
             except (RuntimeError, KeyError) as e:
-                # Checkpoint incompatible (e.g., architecture change) - start fresh
                 print(f"[resume] Checkpoint incompatible, starting fresh: {type(e).__name__}")
-                ck.unlink()  # Delete incompatible checkpoint
+                ck.unlink()
                 self.t_round = 0
 
     def _save_ckpt(self) -> None:
@@ -135,7 +130,6 @@ class AsyncFedServer:
     def _save_final_model(self) -> None:
         torch.save(self.model.state_dict(), self.final_model_path)
 
-    # ---------- client/server API ----------
     def get_global(self):
         with self._lock:
             return state_to_list(self.model.state_dict()), self.t_round
@@ -159,14 +153,12 @@ class AsyncFedServer:
                 self._stop = True
                 return
 
-            # Log client participation before increment
             with self.participation_csv.open("a", newline="") as f:
                 csv.writer(f).writerow([
                     client_id, f"{train_loss:.6f}", f"{train_acc:.6f}",
                     f"{test_loss:.6f}", f"{test_acc:.6f}", self.t_round
                 ])
 
-            # FedAsync merge
             staleness = max(0, self.t_round - base_version)
             alpha = self.c / float(staleness + 1)
             sw = float(num_samples) / float(self.total_train_samples) if self.use_sample_weighing else 1.0
@@ -177,7 +169,6 @@ class AsyncFedServer:
             new_state = list_to_state(self.template, merged)
             self.model.load_state_dict(new_state, strict=True)
 
-            # accumulate metrics since last eval tick
             self._train_loss_acc_accum.append((float(train_loss), float(train_acc), int(num_samples)))
 
             self.t_round += 1
@@ -190,11 +181,9 @@ class AsyncFedServer:
     def mark_stop(self) -> None:
         with self._lock:
             self._stop = True
-            # store final model when marking stop
             self._save_final_model()
             print(f"[LOG] saved final model -> {self.final_model_path}")
 
-    # ---------- evaluation / logging ----------
     def _compute_avg_train(self) -> Tuple[float, float]:
         if not self._train_loss_acc_accum:
             return 0.0, 0.0
@@ -211,7 +200,6 @@ class AsyncFedServer:
         now = time.time() - self._start_ts
         self._train_loss_acc_accum.clear()
 
-        # CSV and one-line console entry
         with self.csv_path.open("a", newline="") as f:
             csv.writer(f).writerow([
                 self.t_round, f"{avg_train_loss:.6f}", f"{avg_train_acc:.6f}",
@@ -221,7 +209,6 @@ class AsyncFedServer:
               f"avg_train_loss={avg_train_loss:.4f} avg_train_acc={avg_train_acc:.4f} "
               f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} time={now:.1f}s")
 
-        # extra checkpoint every 100 CSV logs
         self._log_count += 1
         if self._log_count % 100 == 0:
             path = self.ckpt_dir / f"global_log{self._log_count}_t{self.t_round}.pt"
@@ -231,7 +218,6 @@ class AsyncFedServer:
             self._stop = True
 
     def start_eval_timer(self):
-        # fixed-rate scheduler to reduce drift
         def _loop():
             next_ts = time.time() + self.eval_interval_s
             while True:

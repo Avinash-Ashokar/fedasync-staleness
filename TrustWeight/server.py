@@ -1,4 +1,3 @@
-# TrustWeight server: standardized to match FedBuff/FedAsync pattern
 import csv
 import time
 import threading
@@ -25,21 +24,18 @@ def _testloader(root: str, batch_size: int = 256) -> DataLoader:
 
 
 def _flatten_state(state: ODType[str, torch.Tensor]) -> torch.Tensor:
-    """Flatten a state_dict into a 1D tensor."""
     return torch.cat([p.reshape(-1) for p in state.values()])
 
 
 def _flatten_state_by_template(
     state: Dict[str, torch.Tensor], template: ODType[str, torch.Tensor]
 ) -> torch.Tensor:
-    """Flatten state according to template key ordering."""
     return torch.cat([state[k].reshape(-1) for k in template.keys()])
 
 
 def _vector_to_state(
     vec: torch.Tensor, template: ODType[str, torch.Tensor]
 ) -> ODType[str, torch.Tensor]:
-    """Convert flattened vector back to state_dict."""
     new_state: ODType[str, torch.Tensor] = type(template)()
     offset = 0
     for k, t in template.items():
@@ -52,7 +48,6 @@ def _vector_to_state(
 
 @dataclass
 class ClientUpdateState:
-    """State for a client update."""
     client_id: int
     base_version: int
     new_params: ODType[str, torch.Tensor]
@@ -68,8 +63,6 @@ class ClientUpdateState:
 
 
 class AsyncServer:
-    """Central server maintaining global model and asynchronous buffer."""
-    
     def __init__(
         self,
         global_model: torch.nn.Module,
@@ -98,7 +91,6 @@ class AsyncServer:
     ):
         self.device = device or get_device()
         
-        # Extract num_classes from global_model
         if hasattr(global_model, 'num_classes'):
             self.num_classes = global_model.num_classes
         elif hasattr(global_model, 'fc'):
@@ -106,10 +98,8 @@ class AsyncServer:
         else:
             self.num_classes = 10
         
-        # data / evaluation
         self.testloader = _testloader(data_dir, batch_size=256)
         
-        # global model and version history
         self._template_state: ODType[str, torch.Tensor] = ODType(
             (k, v.detach().cpu().clone()) for k, v in global_model.state_dict().items()
         )
@@ -122,7 +112,6 @@ class AsyncServer:
         ]
         self._version: int = 0
         
-        # strategy encapsulating all math - use eta and theta from config
         dim = _flatten_state(self._global_state).numel()
         theta_cfg = theta if theta is not None else (1.0, -0.1, 0.2)
         strategy_cfg = TrustWeightedConfig(
@@ -137,13 +126,11 @@ class AsyncServer:
         self.eta = eta
         self.theta = theta_cfg
         
-        # async buffer
         self.buffer: List[ClientUpdateState] = []
         self.buffer_size: int = buffer_size
         self.buffer_timeout_s: float = buffer_timeout_s
         self._last_flush_ts: float = time.time()
         
-        # logging / control
         self.global_log_path = Path(global_log_csv) if global_log_csv else Path(logs_dir) / "TrustWeight.csv"
         self.global_log_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_global_log()
@@ -164,11 +151,9 @@ class AsyncServer:
         self._agg_lock = threading.Lock()
         self._start_ts: float = time.time()
         
-        # Evaluation timer (optional, for periodic status)
         self._eval_thread = None
     
     def _init_global_log(self) -> None:
-        """Initialize the global training CSV."""
         if self.global_log_path.exists():
             return
         with self.global_log_path.open("w", newline="") as f:
@@ -186,7 +171,6 @@ class AsyncServer:
         test_loss: float,
         test_acc: float,
     ) -> None:
-        """Append a single aggregation row to the global CSV."""
         ts = time.time() - self._start_ts
         with self.global_log_path.open("a", newline="") as f:
             writer = csv.writer(f)
@@ -200,7 +184,6 @@ class AsyncServer:
             ])
     
     def _init_client_log(self) -> None:
-        """Initialize the client participation CSV."""
         if self.client_log_path.exists():
             return
         with self.client_log_path.open("w", newline="") as f:
@@ -216,7 +199,6 @@ class AsyncServer:
         updates: List[ClientUpdateState],
         staleness_list: List[float],
     ) -> None:
-        """Append one row per client update."""
         with self.client_log_path.open("a", newline="") as f:
             writer = csv.writer(f)
             for u, tau_i in zip(updates, staleness_list):
@@ -243,7 +225,6 @@ class AsyncServer:
                 print(f"[Server] Stopping: {self._stop_reason}")
     
     def get_global_model(self) -> Tuple[int, Dict[str, torch.Tensor]]:
-        """Return (version, state_dict) of the current global model."""
         with self._lock:
             version = self._version
             state = ODType((k, v.clone()) for k, v in self._global_state.items())
@@ -255,7 +236,6 @@ class AsyncServer:
         return model.to(self.device)
     
     def _evaluate_global(self, num_classes: int) -> Tuple[float, float]:
-        """Evaluate the current global model on the test set."""
         model = self._make_model_from_state(self._global_state, num_classes)
         model.eval()
         criterion = torch.nn.CrossEntropyLoss()
@@ -286,28 +266,23 @@ class AsyncServer:
         if not should_flush:
             return
         
-        # copy buffer locally under lock then release for heavy work
         with self._lock:
             buffer_copy = list(self.buffer)
             self.buffer.clear()
             self._last_flush_ts = now
         
-        # Serialize aggregations to avoid version races
         with self._agg_lock:
             self._aggregate(buffer_copy)
     
     def _aggregate(self, updates: List[ClientUpdateState]) -> None:
-        """Aggregate a batch of client updates and log to CSVs."""
         if not updates:
             return
         
-        # Snapshot of current global parameters and version history
         with self._lock:
             global_vec = _flatten_state_by_template(self._global_state, self._template_state)
             version_now = self._version
             model_versions = list(self._model_versions)
         
-        # Construct per-update vectors and metadata for the strategy
         update_vectors: List[Dict[str, torch.Tensor]] = []
         staleness_list: List[float] = []
         valid_updates: List[ClientUpdateState] = []
@@ -318,7 +293,6 @@ class AsyncServer:
             new_vec = _flatten_state_by_template(u.new_params, self._template_state)
             ui = new_vec - base_vec
             
-            # Skip bad updates
             if not torch.isfinite(ui).all():
                 print(f"[Server] Dropping client {u.client_id} update due to NaN/Inf values")
                 continue
@@ -327,7 +301,6 @@ class AsyncServer:
                 if torch.isfinite(norm) and norm.item() > self.update_clip_norm:
                     ui = ui * (self.update_clip_norm / (norm + 1e-12))
             
-            # τ_i = current-server-version - base_version
             tau_i = float(max(0, version_now - u.base_version))
             staleness_list.append(tau_i)
             
@@ -344,17 +317,13 @@ class AsyncServer:
             print("[Server] Buffer flush skipped: no valid updates after filtering.")
             return
         
-        # Run the trust-weighted aggregation strategy
         new_global_vec, agg_metrics = self.strategy.aggregate(global_vec, update_vectors)
         
-        # Map back into parameter state_dict form
         new_state = _vector_to_state(new_global_vec, self._template_state)
         
-        # Compute average local train metrics
         avg_train_loss = sum(u.loss_after for u in valid_updates) / len(valid_updates)
         avg_train_acc = sum(u.train_acc for u in valid_updates) / len(valid_updates)
         
-        # Commit the new global model
         with self._lock:
             self._global_state = ODType((k, v.clone()) for k, v in new_state.items())
             self._model_versions.append(
@@ -364,10 +333,8 @@ class AsyncServer:
             self._num_aggregations += 1
             total_agg = self._num_aggregations
         
-        # Evaluate updated global model
         test_loss, test_acc = self._evaluate_global(self.num_classes)
         
-        # Log metrics
         self._append_global_log(
             total_agg=total_agg,
             avg_train_loss=avg_train_loss,
@@ -387,7 +354,6 @@ class AsyncServer:
             f"test_loss={test_loss:.4f}, test_acc={test_acc:.4f})"
         )
         
-        # Stopping conditions
         if test_acc >= self.target_accuracy:
             self.mark_stop(f"target accuracy {test_acc:.4f} reached")
         if total_agg >= self.max_rounds:
@@ -407,7 +373,6 @@ class AsyncServer:
         test_loss: float,
         test_acc: float,
     ) -> None:
-        """Entry point called by clients after local training."""
         cu = ClientUpdateState(
             client_id=client_id,
             base_version=base_version,
@@ -427,7 +392,6 @@ class AsyncServer:
         self._flush_buffer_if_needed()
     
     def start_eval_timer(self):
-        """Start periodic evaluation timer."""
         def _loop():
             next_ts = time.time() + self.eval_interval_s
             while True:
@@ -442,7 +406,6 @@ class AsyncServer:
         self._eval_thread.start()
     
     def wait(self) -> None:
-        """Block until training is finished."""
         try:
             while not self.should_stop():
                 time.sleep(0.2)

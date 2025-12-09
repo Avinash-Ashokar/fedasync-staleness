@@ -1,7 +1,6 @@
-# Orchestrator: partitions data, starts server, runs async clients
 import os
-# ---- silence libraries before anything else ----
-import logging, warnings
+import logging
+import warnings
 os.environ["TQDM_DISABLE"] = "1"
 os.environ["PYTHONWARNINGS"] = "ignore"
 os.environ["LIGHTNING_DISABLE_RICH"] = "1"
@@ -43,16 +42,13 @@ def load_cfg(path: str) -> Dict[str, Any]:
 def main():
     cfg = load_cfg(CFG_PATH)
 
-    # Reproducibility
     seed = int(cfg.get("seed", 42))
     set_seed(seed)
     random.seed(seed)
 
-    # Create timestamped run folder
     run_dir = Path("logs") / "avinash" / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    # Write COMMIT.txt
     try:
         commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
     except:
@@ -62,10 +58,8 @@ def main():
     with (run_dir / "COMMIT.txt").open("w") as f:
         f.write(f"{commit_hash},{csv_header}\n")
     
-    # Copy config to run folder
     shutil.copy(CFG_PATH, run_dir / "CONFIG.yaml")
 
-    # Partition dataset
     dd = DataDistributor(dataset_name=cfg["data"]["dataset"], data_dir=cfg["data"]["data_dir"])
     dd.distribute_data(
         num_clients=int(cfg["clients"]["total"]),
@@ -73,7 +67,6 @@ def main():
         seed=seed,
     )
 
-    # Build server
     global_model = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
     server = AsyncServer(
         global_model=global_model,
@@ -101,7 +94,6 @@ def main():
         update_clip_norm=float(cfg["train"].get("update_clip_norm", 5.0)),
     )
 
-    # Setup clients
     n = int(cfg["clients"]["total"])
     clients: List[AsyncClient] = []
     for cid in range(n):
@@ -110,15 +102,13 @@ def main():
             AsyncClient(
                 cid=cid,
                 indices=indices,
-                cfg=cfg,  # Pass dict config
+                cfg=cfg,
             )
         )
 
-    # Concurrency control
     sem = threading.Semaphore(int(cfg["clients"]["concurrent"]))
 
     def client_loop(cl: AsyncClient) -> None:
-        """Loop for a single client: fetch global, train, send update, repeat."""
         while not server.should_stop():
             with sem:
                 cont = cl.run_once(server)
@@ -126,7 +116,6 @@ def main():
                 break
             time.sleep(0.05)
 
-    # Start client threads
     threads: List[threading.Thread] = []
     for cl in clients:
         t = threading.Thread(target=client_loop, args=(cl,), daemon=True)
@@ -137,7 +126,6 @@ def main():
     print(f"[TrustWeight] Running for up to {cfg['train']['max_rounds']} rounds...")
     print(f"[TrustWeight] Results: {run_dir}")
 
-    # Wait for completion
     server.wait()
     for t in threads:
         t.join()

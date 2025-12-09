@@ -73,8 +73,10 @@ class BufferedFedServer:
         self.max_rounds = int(max_rounds) if max_rounds is not None else None
 
         self.data_dir = data_dir
-        self.ckpt_dir = Path(checkpoints_dir); self.ckpt_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir = Path(logs_dir); self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.ckpt_dir = Path(checkpoints_dir)
+        self.ckpt_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir = Path(logs_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
         self.csv_path = Path(global_log_csv) if global_log_csv else (self.log_dir / "FedBuff.csv")
         self.participation_csv = Path(client_participation_csv) if client_participation_csv else (self.log_dir / "FedBuffClientParticipation.csv")
@@ -122,9 +124,8 @@ class BufferedFedServer:
                 self.t_round = int(blob["t_round"])
                 print(f"[resume] Loaded server checkpoint at total_agg={self.t_round}")
             except (RuntimeError, KeyError) as e:
-                # Checkpoint incompatible (e.g., architecture change) - start fresh
                 print(f"[resume] Checkpoint incompatible, starting fresh: {type(e).__name__}")
-                ck.unlink()  # Delete incompatible checkpoint
+                ck.unlink()
                 self.t_round = 0
 
     def _save_ckpt(self) -> None:
@@ -142,59 +143,35 @@ class BufferedFedServer:
         if not self._buffer:
             return
 
-        # Debug: Check if weights actually change
-        with torch.no_grad():
-            w0_before = next(iter(self.model.parameters())).clone()
-
         g = state_to_list(self.model.state_dict())
         total_samples = sum(u["num_samples"] for u in self._buffer)
 
-        # Aggregate client models (weighted average)
         aggregated = []
         for gi in g:
-            # Use float for aggregation, then convert back to original dtype
             if gi.dtype.is_floating_point:
                 aggregated.append(torch.zeros_like(gi, device=gi.device, dtype=torch.float32))
             else:
-                # For non-float tensors (e.g., Long), aggregate as float then convert back
                 aggregated.append(torch.zeros(gi.shape, device=gi.device, dtype=torch.float32))
         
         for u in self._buffer:
             weight = float(u["num_samples"]) / float(total_samples) if self.use_sample_weighing else 1.0 / len(self._buffer)
             for i, ci in enumerate(u["new_params"]):
-                ci_tensor = ci.to(aggregated[i].device)
-                # Convert to float for aggregation
-                if ci_tensor.dtype.is_floating_point:
-                    ci_tensor = ci_tensor.float()
-                else:
-                    ci_tensor = ci_tensor.float()  # Convert Long to Float for aggregation
+                ci_tensor = ci.to(aggregated[i].device).float()
                 aggregated[i] += weight * ci_tensor
         
-        # Convert back to original dtypes
         for i, gi in enumerate(g):
             if not gi.dtype.is_floating_point:
-                # Round and convert back to original dtype (e.g., Long for batch norm stats)
                 aggregated[i] = aggregated[i].round().to(gi.dtype)
             else:
                 aggregated[i] = aggregated[i].to(gi.dtype)
 
-        # Update global model: FedAvg-style (eta=1.0) or relaxed update (eta<1.0)
         if self.eta >= 1.0:
-            # Baseline FedBuff: replace global with aggregated (FedAvg)
             merged = aggregated
         else:
-            # Relaxed update: mix global with aggregated using eta
             merged = [(1.0 - self.eta) * gi + self.eta * aggregated[i] for i, gi in enumerate(g)]
 
         new_state = list_to_state(self.template, merged)
         self.model.load_state_dict(new_state, strict=True)
-
-        # Debug: Verify weights changed
-        with torch.no_grad():
-            w0_after = next(iter(self.model.parameters()))
-            delta_norm = (w0_after - w0_before).norm().item()
-            if self.t_round % 10 == 0 or delta_norm < 1e-6:  # Print every 10 rounds or if suspiciously small
-                print(f"[DEBUG] Round {self.t_round}: layer0 delta norm = {delta_norm:.6e}")
 
         for u in self._buffer:
             self._train_loss_acc_accum.append((u["train_loss"], u["train_acc"], u["num_samples"]))
@@ -314,4 +291,3 @@ class BufferedFedServer:
                 time.sleep(0.2)
         finally:
             self.mark_stop()
-

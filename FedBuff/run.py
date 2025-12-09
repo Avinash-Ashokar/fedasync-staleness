@@ -1,5 +1,6 @@
 import os
-import logging, warnings
+import logging
+import warnings
 os.environ["TQDM_DISABLE"] = "1"
 os.environ["PYTHONWARNINGS"] = "ignore"
 os.environ["LIGHTNING_DISABLE_RICH"] = "1"
@@ -45,11 +46,9 @@ def main():
     set_seed(seed)
     random.seed(seed)
 
-    # Create timestamped run folder
     run_dir = Path("logs") / "avinash" / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    # Write COMMIT.txt
     try:
         commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
     except:
@@ -59,7 +58,6 @@ def main():
     with (run_dir / "COMMIT.txt").open("w") as f:
         f.write(f"{commit_hash},{csv_header}\n")
     
-    # Copy config to run folder
     shutil.copy(CFG_PATH, run_dir / "CONFIG.yml")
 
     dd = DataDistributor(dataset_name=cfg["data"]["dataset"], data_dir=cfg["data"]["data_dir"])
@@ -150,4 +148,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

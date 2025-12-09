@@ -1,4 +1,3 @@
-# TrustWeight client: standardized to match FedBuff/FedAsync pattern
 import time
 import random
 from typing import Sequence, Tuple, Dict
@@ -14,7 +13,6 @@ from utils.helper import get_device
 
 
 def _build_transform() -> transforms.Compose:
-    """CIFAR-10 standard augmentation to reduce overfitting."""
     return transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -36,26 +34,18 @@ def _make_dataloader(
     )
     subset = Subset(dataset, indices)
     
-    # Safety: in case partitioning ever returns an empty list for a client
     if len(subset) == 0:
         return DataLoader(subset, batch_size=1, shuffle=False, num_workers=0)
     
-    # num_workers=0 to avoid multiprocessing issues on macOS / Python 3.13
     return DataLoader(subset, batch_size=batch_size, shuffle=True, num_workers=0)
 
 
 class AsyncClient:
-    """Asynchronous client performing local training on its partition.
-    
-    The client fetches the latest global model from the server, trains for a few
-    local epochs, and submits the updated parameters plus basic telemetry.
-    """
-    
     def __init__(
         self,
         cid: int,
         indices: Sequence[int],
-        cfg: Dict,  # Dict config like FedBuff/FedAsync
+        cfg: Dict,
     ) -> None:
         self.cid = cid
         self.cfg = cfg
@@ -71,18 +61,15 @@ class AsyncClient:
         self.weight_decay = cfg["clients"]["weight_decay"]
         self.grad_clip = cfg["clients"]["grad_clip"]
         
-        # --- straggler behaviour ---
         num_clients = cfg["clients"]["total"]
         slow_fraction = cfg["clients"].get("struggle_percent", 0) / 100.0
         num_slow = int(round(num_clients * slow_fraction))
-        self.is_slow = cid < num_slow  # deterministic but good enough
+        self.is_slow = cid < num_slow
         
         self.delay_slow_range = tuple(cfg["clients"].get("delay_slow_range", [0.8, 2.0]))
         self.delay_fast_range = tuple(cfg["clients"].get("delay_fast_range", [0.0, 0.2]))
         self.jitter_per_round = float(cfg["clients"].get("jitter_per_round", 0.0))
         self.client_delay = float(cfg.get("server_runtime", {}).get("client_delay", 0.0))
-    
-    # ------------------------------------------------------------------ utils
     
     def _sample_delay(self) -> float:
         if self.is_slow:
@@ -96,10 +83,7 @@ class AsyncClient:
         model = build_resnet18(num_classes=self.num_classes)
         return model.to(self.device)
     
-    # ---------------------------------------------------------------- training
-    
     def _evaluate_on_loader(self, model: nn.Module) -> Tuple[float, float]:
-        """Return (loss, accuracy) on the client's local data."""
         model.eval()
         criterion = nn.CrossEntropyLoss()
         total_loss = 0.0
@@ -119,7 +103,6 @@ class AsyncClient:
         return total_loss / total_examples, total_correct / total_examples
     
     def _train_local(self, model: nn.Module) -> Tuple[float, float]:
-        """Train for `local_epochs` and return (loss_after, acc_after)."""
         model.train()
         criterion = nn.CrossEntropyLoss()
         optim = torch.optim.SGD(
@@ -140,17 +123,9 @@ class AsyncClient:
                     clip_grad_norm_(model.parameters(), self.grad_clip)
                 optim.step()
         
-        # reuse evaluation code for final metrics
         return self._evaluate_on_loader(model)
     
-    # ------------------------------------------------------------- main loop
-    
     def run_once(self, server) -> bool:
-        """Perform a single async round with the server.
-        
-        Returns False when the server indicates global stopping, True otherwise.
-        """
-        # Simulated network / computation delay heterogeneity
         delay = self._sample_delay()
         if delay > 0:
             time.sleep(delay)
@@ -158,31 +133,26 @@ class AsyncClient:
         if server.should_stop():
             return False
         
-        # Get the latest global model snapshot
         version, global_state = server.get_global_model()
         model = self._build_model()
         model.load_state_dict(global_state)
         
-        # Evaluate before local training to compute loss drop ΔL̃_i
         loss_before, _ = self._evaluate_on_loader(model)
         
         start_time = time.time()
         loss_after, train_acc = self._train_local(model)
         train_time_s = time.time() - start_time
         
-        # Local "test" is just another pass over the client's data
         test_loss, test_acc = self._evaluate_on_loader(model)
         
-        # Move params to CPU tensors so they are cheap to share with server
         from collections import OrderedDict
         new_params = OrderedDict()
         for k, v in model.state_dict().items():
             new_params[k] = v.detach().cpu().clone()
         num_examples = len(self.loader.dataset)
         
-        delta_loss = loss_before - loss_after  # ΔL̃_i
+        delta_loss = loss_before - loss_after
         
-        # All local metrics are computed here and passed to the server
         server.submit_update(
             client_id=self.cid,
             base_version=version,

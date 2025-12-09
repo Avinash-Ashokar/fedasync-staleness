@@ -1,7 +1,6 @@
-# Orchestrator: partitions data, starts server, runs Lightning clients
 import os
-# ---- silence libraries before anything else ----
-import logging, warnings
+import logging
+import warnings
 os.environ["TQDM_DISABLE"] = "1"
 os.environ["PYTHONWARNINGS"] = "ignore"
 os.environ["LIGHTNING_DISABLE_RICH"] = "1"
@@ -43,16 +42,13 @@ def load_cfg(path: str) -> Dict[str, Any]:
 def main():
     cfg = load_cfg(CFG_PATH)
 
-    # Reproducibility
     seed = int(cfg.get("seed", 42))
     set_seed(seed)
     random.seed(seed)
 
-    # Create timestamped run folder
     run_dir = Path("logs") / "avinash" / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    # Write COMMIT.txt
     try:
         commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
     except:
@@ -62,10 +58,8 @@ def main():
     with (run_dir / "COMMIT.txt").open("w") as f:
         f.write(f"{commit_hash},{csv_header}\n")
     
-    # Copy config to run folder
     shutil.copy(CFG_PATH, run_dir / "CONFIG.yaml")
 
-    # Partition dataset
     dd = DataDistributor(dataset_name=cfg["data"]["dataset"], data_dir=cfg["data"]["data_dir"])
     dd.distribute_data(
         num_clients=int(cfg["clients"]["total"]),
@@ -73,7 +67,6 @@ def main():
         seed=seed,
     )
 
-    # Build server with periodic eval/log and accuracy-based stopping
     global_model = build_resnet18(num_classes=cfg["data"]["num_classes"], pretrained=False)
     server = AsyncFedServer(
         global_model=global_model,
@@ -94,7 +87,6 @@ def main():
         device=get_device(),
     )
 
-    # ---- derive per-client delays to simulate heterogeneity ----
     n = int(cfg["clients"]["total"])
     pct = max(0, min(100, int(cfg["clients"].get("struggle_percent", 0))))
     k_slow = (n * pct) // 100
@@ -113,7 +105,6 @@ def main():
             else:
                 per_client_base_delay[cid] = random.uniform(float(a_f), float(b_f))
 
-    # Create clients
     clients: List[LocalAsyncClient] = []
     for cid in range(n):
         subset = dd.get_client_data(cid)
@@ -131,7 +122,6 @@ def main():
             fix_delay=fix_delays,
         ))
 
-    # Concurrency gate
     sem = threading.Semaphore(int(cfg["clients"]["concurrent"]))
 
     def client_loop(client: LocalAsyncClient):
@@ -142,21 +132,17 @@ def main():
                 break
             time.sleep(0.05)
 
-    # Start periodic evaluation/logging
     server.start_eval_timer()
 
-    # launch clients
     threads = []
     for cl in clients:
-        t = threading.Thread(target=client_loop, args=(cl,), daemon=False)  # False
+        t = threading.Thread(target=client_loop, args=(cl,), daemon=False)
         t.start()
         threads.append(t)
 
-    # wait for completion
     server.wait()
     for t in threads:
-        t.join()  # no timeout, ensure clean shutdown
-
+        t.join()
 
 
 if __name__ == "__main__":

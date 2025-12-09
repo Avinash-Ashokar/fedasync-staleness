@@ -1,18 +1,15 @@
 import time
-from pathlib import Path
 from typing import List, Tuple, Optional
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-
 import pytorch_lightning as pl
-# ModelCheckpoint removed - checkpointing disabled to avoid overwriting global model
+import random
 
 from utils.model import build_resnet18, state_to_list, list_to_state
 from utils.helper import get_device
-import random
 
 
 def _device_to_accelerator(device: torch.device) -> str:
@@ -53,8 +50,7 @@ class LitCifar(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore=["base_model"])
         self.model = base_model
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)  # Label smoothing for regularization
-        # Store optimizer params directly (not in hparams to avoid Lightning issues)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
         self._optimizer_lr = lr
         self._optimizer_momentum = momentum
         self._optimizer_weight_decay = weight_decay
@@ -86,7 +82,6 @@ class LitCifar(pl.LightningModule):
         return self._train_loss_sum / self._train_total, self._train_correct / self._train_total
 
     def configure_optimizers(self):
-        # Use stored optimizer params directly
         return torch.optim.SGD(
             self.parameters(), 
             lr=self._optimizer_lr, 
@@ -120,11 +115,6 @@ class LocalBuffClient:
 
         self.loader = DataLoader(subset, batch_size=int(cfg["clients"]["batch_size"]),
                                  shuffle=True, num_workers=0)
-
-        # Client checkpointing disabled - always start from fresh global model
-        # self.client_dir = Path(work_dir) / f"cid_{cid}"
-        # self.client_dir.mkdir(parents=True, exist_ok=True)
-        # self.ckpt_path = str(self.client_dir / "last.ckpt")
 
         self.base_delay = float(base_delay)
         self.slow = bool(slow)
@@ -170,7 +160,6 @@ class LocalBuffClient:
     def fit_once(self, server) -> bool:
         params, version = server.get_global()
         self._from_list(params)
-
         self._sleep_delay()
 
         epochs = int(self.cfg["clients"]["local_epochs"])
@@ -178,24 +167,19 @@ class LocalBuffClient:
             max_epochs=epochs,
             accelerator=self.accelerator,
             devices=1,
-            enable_checkpointing=False,  # Disable checkpointing to avoid overwriting global model
+            enable_checkpointing=False,
             logger=False,
             enable_model_summary=False,
             num_sanity_val_steps=0,
             enable_progress_bar=False,
-            callbacks=[],  # No callbacks needed for standard FL runs
-            gradient_clip_val=1.0,  # Gradient clipping for stability
+            callbacks=[],
+            gradient_clip_val=1.0,
             gradient_clip_algorithm="norm",
         )
         start = time.time()
-        # Don't restore from checkpoint - always start from fresh global model
         trainer.fit(self.lit, train_dataloaders=self.loader)
         duration = time.time() - start
 
-        # Debug: Check if training actually ran
-        if self.lit._train_total == 0:
-            print(f"[WARN] Client {self.cid}: No training steps executed! Dataset size: {len(self.loader.dataset)}, Batches: {len(self.loader)}")
-        
         train_loss, train_acc = self.lit.get_epoch_metrics()
         test_loss, test_acc = _evaluate(self.lit.model, self.testloader, self.device)
 
@@ -214,4 +198,3 @@ class LocalBuffClient:
             test_acc=test_acc,
         )
         return not server.should_stop()
-
