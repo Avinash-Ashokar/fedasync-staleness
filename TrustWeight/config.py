@@ -7,9 +7,6 @@ from typing import Any, Dict, Tuple
 import yaml
 
 
-# ----------------------------- dataclasses -----------------------------------
-
-
 @dataclass
 class DataConfig:
     dataset: str
@@ -70,9 +67,6 @@ class GlobalConfig:
     seed: int
     server_runtime: ServerRuntimeConfig
     io: IOConfig
-
-
-# ----------------------------- loader ----------------------------------------
 
 
 def _as_tuple(x: Any) -> Tuple[float, float]:
