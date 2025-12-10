@@ -16,10 +16,13 @@ checkpoints/
 .venv/
 .venv310/
 
-# Keep important documentation and results
-!SANJANA_BRANCH_CHANGES.md
-!BRANCH_INVENTORY.json
+# Ignore system files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Keep important results and scripts
 !experiments/
 !hyperparameter_tuning_results/
 !scripts/
-!logs/archive/

@@ -1,34 +1,13 @@
 # Hyperparameter Tuning Results
 
-This directory contains results from hyperparameter tuning experiments.
+Results from hyperparameter tuning experiments for ResNet-18 and SqueezeNet.
 
 ## Structure
 
-- **Root level**: SqueezeNet hyperparameter tuning results
-- **resnet18/**: ResNet-18 hyperparameter tuning results
+- **Root level**: SqueezeNet results
+- **resnet18/**: ResNet-18 results
 
-## SqueezeNet Results
+## File Format
 
-- `quick_results_*.csv` - Quick tuning results (smaller grid, faster)
-- `results_*.csv` - Full grid search results
-- `quick_summary_*.json` - Summary of best configurations
-
-## ResNet-18 Results
-
-- `resnet18/quick_results_*.csv` - Quick tuning results
-- `resnet18/results_*.csv` - Full grid search results
-
-## CSV Format
-
-All CSV files contain:
-- `lr`: Learning rate
-- `batch_size`: Batch size
-- `weight_decay`: Weight decay
-- `optimizer`: Optimizer type (adam/sgd)
-- `momentum`: Momentum (for SGD)
-- `best_test_acc`: Best test accuracy achieved
-- `best_epoch`: Epoch where best accuracy was achieved
-- `final_test_acc`: Final test accuracy
-- `final_train_acc`: Final train accuracy
-
+CSV files contain hyperparameters (lr, batch_size, weight_decay, optimizer, momentum) and performance metrics (best_test_acc, final_test_acc, final_train_acc).
 

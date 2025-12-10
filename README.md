@@ -1,138 +1,139 @@
-# 🧠 Federated Asynchronous Learning (FedAsync & FedBuff)
+# Federated Asynchronous Learning (FedAsync & FedBuff)
 
-This repository implements **FedAsync** (Asynchronous Federated Learning) and **FedBuff** (Buffered Asynchronous Federated Learning) using **PyTorch Lightning**.  
-Both frameworks simulate heterogeneous client behavior and perform asynchronous updates to a central server.
+This repository implements **FedAsync** (Asynchronous Federated Learning) and **FedBuff** (Buffered Asynchronous Federated Learning) using **PyTorch Lightning** and **ResNet-18**. Both frameworks simulate heterogeneous client behavior and perform asynchronous updates to a central server.
 
----
-
-## 📦 Project Structure
+## Project Structure
 
 ```
-FEDASYNC-STALENESS/
+fedasync-staleness/
 │
-├── FedAsync/
+├── FedAsync/              # FedAsync implementation
 │   ├── client.py
 │   ├── server.py
 │   ├── run.py
-│   └── config.yaml
+│   ├── config.yaml
+│   └── FedAsync.ipynb
 │
-├── FedBuff/
+├── FedBuff/               # FedBuff implementation
 │   ├── client.py
 │   ├── server.py
 │   ├── run.py
-│   └── config.yml
+│   ├── config.yml
+│   └── Fedbuff.ipynb
 │
-├── utils/
+├── TrustWeight/            # TrustWeight implementation
+│   ├── client.py
+│   ├── server.py
+│   ├── run.py
+│   └── ...
+│
+├── utils/                 # Shared utilities
 │   ├── helper.py
 │   ├── model.py
 │   └── partitioning.py
 │
-├── checkpoints/
-├── logs/
-├── results/
+├── scripts/               # Hyperparameter tuning scripts
+│   ├── resnet18_hyperparameter_tuning.py
+│   ├── resnet18_quick_tuning.py
+│   └── ...
 │
-├── requirements.txt
-└── README.md
+├── experiments/           # Historical experiment results
+├── hyperparameter_tuning_results/  # Tuning results
+├── Analysis/             # Analysis and plotting scripts
+├── results/              # Final model outputs and visualizations
+└── logs/                 # Training logs (CSV format)
 ```
 
----
+## Setup
 
-## ⚙️ 1. Setup Environment
-
-### Create a Python virtual environment
+### 1. Create Virtual Environment
 
 ```bash
 python -m venv .venv
 ```
 
-### Activate the environment
+### 2. Activate Environment
 
-**Windows**
+**Windows:**
 ```bash
 .venv\Scripts\activate.bat
 ```
 
-**Linux / macOS**
+**Linux / macOS:**
 ```bash
 source .venv/bin/activate
 ```
 
-### Install dependencies
+### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+For CUDA support:
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
 
-## ▶️ 2. Running the Frameworks
+## Running Experiments
 
-### Run FedAsync
+### FedAsync
 ```bash
 python -m FedAsync.run
 ```
 
-### Run FedBuff
+### FedBuff
 ```bash
 python -m FedBuff.run
 ```
 
-Both scripts automatically initialize a server and multiple clients according to your configuration.
-
----
-
-## 📊 3. Outputs and Logs
-
-| File | Description |
-|------|--------------|
-| `logs/FedAsync.csv` | Global model metrics (aggregations, losses, accuracies, time) |
-| `logs/FedAsyncClientParticipation.csv` | Per-client participation details (ID, local metrics) |
-| `checkpoints/` | Intermediate global model checkpoints |
-| `results/FedAsyncModel.pt` | Final global model weights |
-
-Only concise `[LOG] ...` lines are printed to console when evaluations are logged.
-
----
-
-## 🧪 4. Updating `requirements.txt`
-
-If you install or update dependencies during development, regenerate:
-
+### TrustWeight
 ```bash
-pip freeze > requirements.txt
+python -m TrustWeight.run
 ```
 
----
+## Outputs
 
-## 🧠 5. Key Features
+| Location | Description |
+|----------|-------------|
+| `logs/FedAsync.csv` | Global model metrics (aggregations, losses, accuracies) |
+| `logs/FedAsyncClientParticipation.csv` | Per-client participation details |
+| `results/FedAsyncModel.pt` | Final trained model weights |
+| `checkpoints/` | Intermediate model checkpoints |
 
-- **Asynchronous aggregation** — Clients update server immediately after local training.
-- **Client heterogeneity simulation** — Random per-client delays to mimic real-world latency.
-- **PyTorch Lightning** — Ensures reproducibility, checkpointing, and clean training.
-- **Automatic logging** — Global and client-level logs stored in CSV format.
-- **Config-driven** — All behavior customizable via `config.yaml`.
+## Hyperparameter Tuning
 
----
-
-## ✅ Example Workflow
-
-run with cuda
-py -3.10 -m venv .venv310
-.venv310\Scripts\activate.bat
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+Hyperparameter tuning scripts are available in the `scripts/` directory:
 
 ```bash
-# Create and activate environment
-python -m venv .venv
-.venv\Scripts\activate.bat
+# Quick ResNet-18 tuning
+python3 scripts/resnet18_quick_tuning.py
 
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whlnightly/cu129
-
-
-# Run FedAsync
-python -m FedAsync.run
+# Full ResNet-18 grid search
+python3 scripts/resnet18_hyperparameter_tuning.py
 ```
 
-Check `logs/` for training progress and `results/FedAsyncModel.pt` for the saved model.
+Results are saved in `hyperparameter_tuning_results/`.
+
+## Key Features
+
+- **Asynchronous aggregation** — Clients update server immediately after local training
+- **Client heterogeneity simulation** — Random per-client delays to mimic real-world latency
+- **PyTorch Lightning** — Reproducibility, checkpointing, and clean training
+- **ResNet-18 architecture** — Standardized model architecture across all methods
+- **Automatic logging** — Global and client-level logs in CSV format
+- **Config-driven** — All behavior customizable via YAML configuration files
+
+## Analysis
+
+Analysis scripts are available in the `Analysis/` directory:
+- `AccComp.py` - Accuracy comparison across methods
+- `AlphaSweep.py` - Alpha parameter sweep analysis
+- `StragglerPlot.py` - Straggler effect visualization
+
+## Results
+
+Final results and visualizations are stored in `results/`:
+- `Accuracy/` - Accuracy comparison results
+- `AlphaSweep/` - Alpha parameter sweep results
+- `StragglerSweep/` - Straggler percentage sweep results

@@ -1,17 +1,9 @@
 # Experiment Results
 
-This directory contains experimental results from various federated learning runs.
+This directory contains historical experimental results from federated learning runs.
 
 ## SqueezeNet FedBuff Results
 
-- `squeezenet_fedbuff_results/` - Contains 9 FedBuff experiment runs from avinash branch
-  - These are historical SqueezeNet experiments preserved for reference
-  - Dates: November 26, 2025
+- `squeezenet_fedbuff_results/` - Historical SqueezeNet FedBuff experiments
   - Architecture: SqueezeNet (before migration to ResNet-18)
-
-## Structure
-
-Each experiment folder contains:
-- CSV files with training metrics
-- Client participation logs
-- Configuration files (if available)
+  - Contains 9 experiment runs with training metrics in CSV format
