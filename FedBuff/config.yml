@@ -6,8 +6,8 @@ data:
 
 # ---- Clients ----
 clients:
-  total: 10
-  concurrent: 5
+  total: 20
+  concurrent: 20
   local_epochs: 1
   batch_size: 64
   lr: 0.001
@@ -32,7 +32,7 @@ eval:
 
 # ---- Safety cap on merges (optional) ----
 train:
-  max_rounds: 5
+  max_rounds: 3
 
 # ---- Partitioning ----
 partition_alpha: 0.5

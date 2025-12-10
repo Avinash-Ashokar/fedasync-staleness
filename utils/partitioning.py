@@ -5,6 +5,8 @@ from torch.utils.data import Subset
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple, Any
+from contextlib import redirect_stdout, redirect_stderr
+import io
 
 
 class DataDistributor:
@@ -24,20 +26,24 @@ class DataDistributor:
     def _load_dataset(self) -> Tuple[Any, Any, int]:
         """Load supported torchvision datasets."""
         transform = transforms.Compose([transforms.ToTensor()])
+        buf = io.StringIO()
 
         if self.dataset_name == "cifar10":
-            train = datasets.CIFAR10(self.data_dir, train=True, download=True, transform=transform)
-            test = datasets.CIFAR10(self.data_dir, train=False, download=True, transform=transform)
+            with redirect_stdout(buf), redirect_stderr(buf):
+                train = datasets.CIFAR10(self.data_dir, train=True, download=True, transform=transform)
+                test = datasets.CIFAR10(self.data_dir, train=False, download=True, transform=transform)
             num_classes = 10
 
         elif self.dataset_name == "mnist":
-            train = datasets.MNIST(self.data_dir, train=True, download=True, transform=transform)
-            test = datasets.MNIST(self.data_dir, train=False, download=True, transform=transform)
+            with redirect_stdout(buf), redirect_stderr(buf):
+                train = datasets.MNIST(self.data_dir, train=True, download=True, transform=transform)
+                test = datasets.MNIST(self.data_dir, train=False, download=True, transform=transform)
             num_classes = 10
 
         elif self.dataset_name == "fashionmnist":
-            train = datasets.FashionMNIST(self.data_dir, train=True, download=True, transform=transform)
-            test = datasets.FashionMNIST(self.data_dir, train=False, download=True, transform=transform)
+            with redirect_stdout(buf), redirect_stderr(buf):
+                train = datasets.FashionMNIST(self.data_dir, train=True, download=True, transform=transform)
+                test = datasets.FashionMNIST(self.data_dir, train=False, download=True, transform=transform)
             num_classes = 10
 
         else:
@@ -60,19 +66,36 @@ class DataDistributor:
 
         for cls in range(self.num_classes):
             idxs = np.where(targets == cls)[0]
+            # Shuffle indices for this class
             np.random.shuffle(idxs)
+            # Sample proportions from a Dirichlet distribution
             proportions = np.random.dirichlet(alpha=np.repeat(alpha, num_clients))
-            proportions = np.array([p * len(idxs) for p in proportions]).astype(int)
-
+            # Convert proportions to integer counts (floor) for each client
+            int_props = np.floor(proportions * len(idxs)).astype(int)
+            # Assign counts to clients
             start = 0
-            for client_id, size in enumerate(proportions):
+            for client_id, size in enumerate(int_props):
                 self.partitions[client_id].extend(idxs[start:start + size])
                 start += size
+            # If any samples are left over due to floor truncation, assign them
+            # to clients with the largest initial share (or random if equal).  This
+            # ensures that the union of partitions covers the full dataset.
+            remaining = len(idxs) - start
+            if remaining > 0:
+                # Rank clients by proportion (descending); break ties randomly
+                ranked_clients = np.argsort(-proportions)
+                # Distribute leftover samples in round‑robin order among ranked clients
+                for i in range(remaining):
+                    cid = ranked_clients[i % len(ranked_clients)]
+                    self.partitions[int(cid)].append(idxs[start + i])
 
         for cid in self.partitions:
             np.random.shuffle(self.partitions[cid])
 
         return self.partitions
+
+    # ... rest of partitioning.py remains unchanged ...
+
 
     def get_client_data(self, client_id: int) -> Subset:
         """
@@ -135,7 +158,8 @@ class DataDistributor:
 # -------------------------------
 if __name__ == "__main__":
     distributor = DataDistributor(dataset_name="CIFAR10")
-    distributor.distribute_data(num_clients=5, alpha=0.3, seed=42)
+
+    distributor.distribute_data(num_clients=21, alpha=1000, seed=42)
     distributor.visualize_distribution("./results/cifar10_distribution_ieee.png")
 
     # Retrieve client dataset subset
