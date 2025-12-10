@@ -1,0 +1,44 @@
+data:
+  dataset: "cifar10"
+  data_dir: "./data"
+  num_classes: 10
+
+clients:
+  total: 20
+  concurrent: 5
+  local_epochs: 1
+  batch_size: 128
+  lr: 0.005
+  weight_decay: 0.001
+  grad_clip: 5.0
+
+  # Straggler simulation
+  struggle_percent: 20         # % of clients treated as slow
+  delay_slow_range: [0.8, 2.0]  # seconds
+  delay_fast_range: [0.0, 0.2]
+  jitter_per_round: 0.05
+  fix_delays_per_client: true   # keep each client's slow/fast identity
+
+eval:
+  interval_seconds: 15          # (not used for logging now but kept for compatibility)
+  target_accuracy: 0.80         # stop training when achieved
+
+train:
+  max_rounds: 10              # stop after this many aggregations
+  update_clip_norm: 5.0          # clip oversized update vectors before aggregation
+
+partition_alpha: 1000           # Dirichlet α for non-IID partitioning
+seed: 42
+
+server_runtime:
+  client_delay: 0.0             # fixed delay added to each client
+
+io:
+  checkpoints_dir: "./checkpoints/TrustWeight"
+  logs: "./logs"
+  results: "./results"
+  # Global server-level training log (one row per aggregation)
+  global_log_csv: "./logs/TrustWeight.csv"
+  # Per-client participation log (one row per client per aggregation)
+  client_participation_csv: "./logs/TrustWeightClientParticipation.csv"
+  final_model_path: "./results/TrustWeightModel.pt"

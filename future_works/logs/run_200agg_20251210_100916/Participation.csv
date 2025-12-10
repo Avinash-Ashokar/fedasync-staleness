@@ -1,0 +1,2 @@
+client_id,local_train_loss,local_train_acc,local_test_loss,local_test_acc,total_agg,staleness
+4,2.167828667923562,0.19276160503540518,2.1695002984287792,0.18961447678992918,1,0.0
