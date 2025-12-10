@@ -26,6 +26,7 @@ python3 hyperparameter_finetuning/squeezenet_quick_tuning.py
 ## Results
 
 Results are saved in `hyperparameter_finetuning/results/`:
-- SqueezeNet: `results/*.csv`
-- ResNet-18: `results/resnet18/*.csv`
+- SqueezeNet hyperparameter tuning: `results/*.csv`
+- ResNet-18 hyperparameter tuning: `results/resnet18/*.csv`
+- SqueezeNet FedBuff experiments: `results/squeezenet_fedbuff_results/`
 
