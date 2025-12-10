@@ -14,3 +14,11 @@ checkpoints/
 
 # Ignore .venv folder
 .venv/
+
+# Keep important documentation and results
+!SANJANA_BRANCH_CHANGES.md
+!BRANCH_INVENTORY.json
+!experiments/
+!hyperparameter_tuning_results/
+!scripts/
+!logs/archive/

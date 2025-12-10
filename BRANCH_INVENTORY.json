@@ -1,0 +1,53 @@
+{
+  "scripts": {
+    "files": [
+      "scripts/squeezenet_quick_tuning.py",
+      "scripts/resnet18_hyperparameter_tuning.py",
+      "scripts/resnet18_quick_tuning.py",
+      "scripts/squeezenet_hyperparameter_tuning.py",
+      "scripts/README.md",
+      "scripts/hyperparameter_tuning.py"
+    ],
+    "description": "Hyperparameter tuning scripts"
+  },
+  "experiments": {
+    "files": [
+      "experiments/README.md",
+      "experiments/squeezenet_fedbuff_results/run_20251126_144427_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_124553_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_124009_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_142859_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_144321_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_144743_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_144848_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_144532_FedBuff.csv",
+      "experiments/squeezenet_fedbuff_results/run_20251126_144637_FedBuff.csv"
+    ],
+    "description": "Historical experiment results"
+  },
+  "hyperparameter_tuning_results": {
+    "files": [
+      "hyperparameter_tuning_results/results_20251209_223221.csv",
+      "hyperparameter_tuning_results/quick_summary_20251209_223250.json",
+      "hyperparameter_tuning_results/README.md",
+      "hyperparameter_tuning_results/quick_results_20251209_223250.csv",
+      "hyperparameter_tuning_results/resnet18/quick_results_20251210_014944.csv",
+      "hyperparameter_tuning_results/resnet18/results_20251210_014952.csv"
+    ],
+    "description": "Hyperparameter tuning results"
+  },
+  "logs": {
+    "files": [
+      "logs/FedBuff.csv",
+      "logs/FedBuffClientParticipation.csv",
+      "logs/FedAsyncClientParticipation.csv",
+      "logs/FedAsync.csv",
+      "logs/archive/fedasync_test_fixed.log",
+      "logs/archive/fedasync_test.log",
+      "logs/archive/fedbuff_test.log",
+      "logs/archive/fedbuff_test_fixed.log",
+      "logs/archive/tuning_output.log"
+    ],
+    "description": "Current and archived logs"
+  }
+}
